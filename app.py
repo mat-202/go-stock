@@ -1,4 +1,4 @@
-            st.import streamlit as st
+import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -67,7 +67,6 @@ NASDAQ_TOP20_OPTIONS = {
     "MSFT": "مايكروسوفت (Microsoft)", "AMZN": "أمازون (Amazon)", "GOOGL": "جوجل (Alphabet)"
 }
 
-# ضبط تواريخ الدورات بدقة
 CONFIRMED_CYCLES = {
     "TSLA": {
         "cycle_months": 49, "up_m": 20, "fib_retrace": 0.618,
@@ -166,24 +165,20 @@ def analyze_full_stock_dynamically(df, symbol_clean):
 
     curr_date = pd.Timestamp("2026-09-01")
 
-    # --- المعادلة النسبية الدقيقة لمنع إزاحة التواريخ ---
     total_curr_m = (cycle_end.year - cycle_start.year) * 12 + (cycle_end.month - cycle_start.month)
     total_prev_m = (prev_end.year - prev_start.year) * 12 + (prev_end.month - prev_start.month)
     
     elapsed_m = (curr_date.year - cycle_start.year) * 12 + (curr_date.month - cycle_start.month)
     
-    # نسبة التقدم في الدورة الحالية
     progress = elapsed_m / total_curr_m if total_curr_m > 0 else 0
     progress_next = (elapsed_m + 1) / total_curr_m if total_curr_m > 0 else 0
 
-    # إسقاط النسبة تماماً على الدورة السابقة
     prev_offset_m = int(round(progress * total_prev_m))
     prev_offset_next_m = int(round(progress_next * total_prev_m))
 
     matched_curr_month_date = prev_start + pd.DateOffset(months=prev_offset_m)
     matched_next_month_date = prev_start + pd.DateOffset(months=prev_offset_next_m)
 
-    # حساب المطابقة الأسبوعية بنفس النسبة
     time_delta = (prev_end - prev_start) * progress
     matched_curr_week_date = prev_start + time_delta
     matched_next_week_date = matched_curr_week_date + pd.DateOffset(days=7)
@@ -352,4 +347,3 @@ if data_list:
             fig.add_hline(y=item['proportional_target'], line_dash="dash", line_color="#10b981", annotation_text=f"المستهدف: {item['proportional_target']}")
             fig.update_layout(template="plotly_white", height=240, margin=dict(l=10, r=10, t=20, b=10))
             st.plotly_chart(fig, use_container_width=True)
-(fig, use_container_width=True)
