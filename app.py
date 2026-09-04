@@ -53,54 +53,42 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# قائمة تاسي
-TASI_ALL_STOCKS = {
-    "2222.SR": "أرامكو السعودية", "1120.SR": "الراجحي", "2010.SR": "سابك", "1180.SR": "الأهلي",
-    "2170.SR": "اللجين", "4323.SR": "سمو", "2082.SR": "أكوا باور", "7010.SR": "STC",
-    "2020.SR": "سابك للمغذيات", "2350.SR": "كيان السعودية", "1150.SR": "الإنماء", "1010.SR": "الرياض"
-}
-
-# قائمة ناسداك
-NASDAQ_TOP20_OPTIONS = {
-    "TSLA": "تيسلا (Tesla)", "NVDA": "أنفيديا (Nvidia)", "META": "ميتا (Meta)", 
-    "INTC": "إنتل (Intel)", "AMD": "إيه إم دي (AMD)", "AAPL": "أبل (Apple)", 
-    "MSFT": "مايكروسوفت (Microsoft)", "AMZN": "أمازون (Amazon)", "GOOGL": "جوجل (Alphabet)"
+TARGET_STOCKS = {
+    "AMD": "إيه إم دي (AMD)",
+    "TSLA": "تيسلا (Tesla)",
+    "META": "ميتا (Meta)",
+    "NVDA": "أنفيديا (Nvidia)"
 }
 
 CONFIRMED_CYCLES = {
-    "TSLA": {
-        "cycle_months": 49, "up_m": 20, "fib_retrace": 0.618,
-        "start": "2024-04-01", "end": "2028-05-01", "peak": "2025-11-01",
-        "prev_start": "2020-03-01", "prev_end": "2024-04-01"
-    },
     "AMD": {
-        "cycle_months": 27, "up_m": 15, "fib_retrace": 0.618,
-        "start": "2024-04-01", "end": "2026-06-30", "peak": "2025-07-01",
-        "prev_start": "2022-01-01", "prev_end": "2024-04-01"
+        "cycle_months": 26, "up_m": 15, "fib_retrace": 0.618,
+        "start": "2024-06-01", "end": "2026-07-01", "peak": "2025-09-01",
+        "prev_start": "2022-01-01", "prev_end": "2024-02-01"
     },
-    "INTC": {
-        "cycle_months": 29, "up_m": 14, "fib_retrace": 0.618,
-        "start": "2025-04-01", "end": "2027-08-01", "peak": "2026-06-01",
-        "prev_start": "2023-04-01", "prev_end": "2025-04-01"
+    "TSLA": {
+        "use_weekly_offset": True,
+        "weeks_offset": 215,
+        "cycle_months": 49, "up_m": 20, "fib_retrace": 0.618,
+        "start": "2024-04-01", "end": "2028-04-01", "peak": "2025-12-01",
+        "prev_start": "2020-03-01", "prev_end": "2024-03-01"
     },
     "META": {
         "cycle_months": 46, "up_m": 33, "fib_retrace": 0.500,
         "start": "2022-11-01", "end": "2026-09-01", "peak": "2025-08-01",
-        "prev_start": "2018-11-01", "prev_end": "2022-11-01"
+        "prev_start": "2018-12-01", "prev_end": "2022-10-01"
     },
     "NVDA": {
         "cycle_months": 30, "up_m": 20, "fib_retrace": 0.618,
-        "start": "2025-05-01", "end": "2027-11-01", "peak": "2026-12-01",
-        "prev_start": "2022-10-01", "prev_end": "2025-05-01"
+        "start": "2025-05-01", "end": "2027-11-01", "peak": "2027-01-01",
+        "prev_start": "2022-10-01", "prev_end": "2025-04-01"
     }
 }
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_stock_data_10y(symbol):
     clean_sym = symbol.strip().upper()
-    if clean_sym.isdigit():
-        clean_sym = f"{clean_sym}.SR"
-    comp_name = TASI_ALL_STOCKS.get(clean_sym, NASDAQ_TOP20_OPTIONS.get(clean_sym, f"سهم {clean_sym}"))
+    comp_name = TARGET_STOCKS.get(clean_sym, f"سهم {clean_sym}")
     
     if YFINANCE_AVAILABLE:
         try:
@@ -118,7 +106,7 @@ def fetch_stock_data_10y(symbol):
     return df_dummy, clean_sym, comp_name
 
 def analyze_full_stock_dynamically(df, symbol_clean):
-    if df.empty:
+    if df.empty or symbol_clean not in CONFIRMED_CYCLES:
         return None
 
     df_res = df.copy()
@@ -128,31 +116,19 @@ def analyze_full_stock_dynamically(df, symbol_clean):
     df_m = df_res.resample('MS').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last'}).dropna()
     df_w = df_res.resample('W-MON').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last'}).dropna()
 
-    if len(df_m) < 24:
+    if len(df_m) < 12:
         return None
 
     last_date = df_m.index[-1]
 
-    if symbol_clean in CONFIRMED_CYCLES:
-        c = CONFIRMED_CYCLES[symbol_clean]
-        long_c = int(c["cycle_months"])
-        up_m = int(c["up_m"])
-        fib_ratio = float(c["fib_retrace"])
-        cycle_start = pd.Timestamp(c["start"])
-        cycle_end = pd.Timestamp(c["end"])
-        peak_date = pd.Timestamp(c["peak"])
-        prev_start = pd.Timestamp(c["prev_start"])
-        prev_end = pd.Timestamp(c["prev_end"])
-    else:
-        seed_val = abs(hash(symbol_clean))
-        long_c = (seed_val % 28) + 20
-        up_m = max(1, int(long_c * 0.6))
-        fib_ratio = 0.618
-        cycle_start = last_date - pd.DateOffset(months=up_m)
-        cycle_end = cycle_start + pd.DateOffset(months=long_c)
-        peak_date = cycle_start + pd.DateOffset(months=up_m)
-        prev_start = cycle_start - pd.DateOffset(months=long_c)
-        prev_end = cycle_start
+    c = CONFIRMED_CYCLES[symbol_clean]
+    long_c = int(c["cycle_months"])
+    up_m = int(c["up_m"])
+    fib_ratio = float(c["fib_retrace"])
+    cycle_start = pd.Timestamp(c["start"])
+    cycle_end = pd.Timestamp(c["end"])
+    peak_date = pd.Timestamp(c["peak"])
+    prev_start = pd.Timestamp(c["prev_start"])
 
     down_m = long_c - up_m
     phase_type = "صعود 🟢" if last_date <= peak_date else "هبوط 🔴"
@@ -165,23 +141,22 @@ def analyze_full_stock_dynamically(df, symbol_clean):
 
     curr_date = pd.Timestamp("2026-09-01")
 
-    total_curr_m = (cycle_end.year - cycle_start.year) * 12 + (cycle_end.month - cycle_start.month)
-    total_prev_m = (prev_end.year - prev_start.year) * 12 + (prev_end.month - prev_start.month)
-    
-    elapsed_m = (curr_date.year - cycle_start.year) * 12 + (curr_date.month - cycle_start.month)
-    
-    progress = elapsed_m / total_curr_m if total_curr_m > 0 else 0
-    progress_next = (elapsed_m + 1) / total_curr_m if total_curr_m > 0 else 0
+    # تطبيق معادلة الـ 215 أسبوعاً الخاصة بتسلا حصراً
+    if c.get("use_weekly_offset", False):
+        offset_weeks = c["weeks_offset"]
+        matched_curr_week_date = curr_date - pd.Timedelta(weeks=offset_weeks)
+        matched_next_week_date = matched_curr_week_date + pd.Timedelta(days=7)
+        
+        matched_curr_month_date = curr_date - pd.Timedelta(weeks=offset_weeks)
+        matched_next_month_date = matched_curr_month_date + pd.DateOffset(months=1)
+    else:
+        m_offset = (curr_date.year - cycle_start.year) * 12 + (curr_date.month - cycle_start.month)
+        matched_curr_month_date = prev_start + pd.DateOffset(months=m_offset)
+        matched_next_month_date = matched_curr_month_date + pd.DateOffset(months=1)
 
-    prev_offset_m = int(round(progress * total_prev_m))
-    prev_offset_next_m = int(round(progress_next * total_prev_m))
-
-    matched_curr_month_date = prev_start + pd.DateOffset(months=prev_offset_m)
-    matched_next_month_date = prev_start + pd.DateOffset(months=prev_offset_next_m)
-
-    time_delta = (prev_end - prev_start) * progress
-    matched_curr_week_date = prev_start + time_delta
-    matched_next_week_date = matched_curr_week_date + pd.DateOffset(days=7)
+        days_offset = (curr_date - cycle_start).days
+        matched_curr_week_date = prev_start + pd.Timedelta(days=days_offset)
+        matched_next_week_date = matched_curr_week_date + pd.Timedelta(days=7)
 
     def eval_candle(df_target, target_date, is_weekly=False):
         if df_target.empty:
@@ -250,13 +225,10 @@ def analyze_full_stock_dynamically(df, symbol_clean):
         "df_m": df_m['Close']
     }
 
-st.title("🌟 منصة الدورات الزمنية والنجوم الحقيقية")
-
-market_choice = st.radio("اختر السوق للتحليل:", ["أمريكي (NASDAQ Options)", "سعودي (TASI)"], horizontal=True)
-pool = NASDAQ_TOP20_OPTIONS if "أمريكي" in market_choice else TASI_ALL_STOCKS
+st.title("🌟 منصة الدورات الزمنية والنجوم (الشركات الأربع)")
 
 data_list = []
-for sym, name in pool.items():
+for sym, name in TARGET_STOCKS.items():
     df_raw, c_sym, c_name = fetch_stock_data_10y(sym)
     if not df_raw.empty:
         res = analyze_full_stock_dynamically(df_raw, c_sym)
