@@ -60,7 +60,6 @@ TARGET_STOCKS = {
     "NVDA": "أنفيديا (Nvidia)"
 }
 
-# الإعدادات المعتمدة مع إضافة حساب شمعات التداول لـ TSLA
 CONFIRMED_CYCLES = {
     "AMD": {
         "cycle_months": 26, "up_m": 15, "fib_retrace": 0.618,
@@ -102,7 +101,6 @@ def fetch_stock_data_10y(symbol):
         except Exception:
             pass
             
-    # بيانات محاكاة احتياطية في حال عدم الاتصال
     dates = pd.date_range(end=datetime.today(), periods=1200, freq='B')
     np.random.seed(abs(hash(clean_sym)) % 10000)
     prices = 50.0 * np.exp(np.cumsum(np.random.normal(0.001, 0.02, size=len(dates))))
@@ -117,8 +115,7 @@ def analyze_full_stock_dynamically(df, symbol_clean):
     df_res['Date'] = pd.to_datetime(df_res['Date']).dt.tz_localize(None)
     df_res.set_index('Date', inplace=True)
     
-    # تحضير الأطر الزمنية
-    df_d = df_res.dropna() # يومي (شمعات التداول)
+    df_d = df_res.dropna()
     df_w = df_res.resample('W-MON').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last'}).dropna()
     df_m = df_res.resample('MS').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last'}).dropna()
 
@@ -147,24 +144,25 @@ def analyze_full_stock_dynamically(df, symbol_clean):
 
     curr_date = pd.Timestamp("2026-09-01")
 
-    # --- حساب المطابقة بناءً على شمعات التداول اليومية / الأسبوعية / الشهرية ---
+    # --- مطابقة الشموع اليومية والأسبوعية والشهرية ---
     if c.get("use_trading_candles", False):
         daily_offset = c["trading_candles_offset"] # 1034 شمعة تداول
         weekly_offset = c["weekly_candles_offset"]  # 215 شمعة أسبوعية
         monthly_offset = c["monthly_candles_offset"] # 49 شمعة شهرية
 
-        # المطابقة اليومية بشمعات التداول
+        # المطابقة اليومية
         curr_d_idx = len(df_d) - 1
         matched_d_idx = max(0, curr_d_idx - daily_offset)
         matched_curr_day_date = df_d.index[matched_d_idx]
+        matched_next_day_date = df_d.index[min(len(df_d) - 1, matched_d_idx + 1)]
 
-        # المطابقة الأسبوعية بشمعات الأسابيع
+        # المطابقة الأسبوعية
         curr_w_idx = len(df_w) - 1
         matched_w_idx = max(0, curr_w_idx - weekly_offset)
         matched_curr_week_date = df_w.index[matched_w_idx]
         matched_next_week_date = df_w.index[min(len(df_w) - 1, matched_w_idx + 1)]
 
-        # المطابقة الشهرية بشمعات الأشهر
+        # المطابقة الشهرية
         curr_m_idx = len(df_m) - 1
         matched_m_idx = max(0, curr_m_idx - monthly_offset)
         matched_curr_month_date = df_m.index[matched_m_idx]
@@ -177,9 +175,11 @@ def analyze_full_stock_dynamically(df, symbol_clean):
         days_offset = (curr_date - cycle_start).days
         matched_curr_week_date = prev_start + pd.Timedelta(days=days_offset)
         matched_next_week_date = matched_curr_week_date + pd.Timedelta(days=7)
+        
         matched_curr_day_date = matched_curr_week_date
+        matched_next_day_date = matched_curr_day_date + pd.Timedelta(days=1)
 
-    def eval_candle(df_target, target_date, is_weekly=False):
+    def eval_candle(df_target, target_date, mode="weekly"):
         if df_target.empty:
             return "بيانات غير متوفرة 🟡", "🟡", 0.0, False, target_date.strftime("%Y-%m-%d")
         
@@ -187,7 +187,16 @@ def analyze_full_stock_dynamically(df, symbol_clean):
         min_idx = diffs.argmin()
         actual_date = df_target.index[min_idx]
         
-        max_allow_days = 14 if is_weekly else 35
+        if mode == "daily":
+            max_allow_days = 7
+            fmt = "%d %B %Y"
+        elif mode == "weekly":
+            max_allow_days = 14
+            fmt = "%d %B %Y"
+        else:
+            max_allow_days = 35
+            fmt = "%B %Y"
+
         if abs((actual_date - target_date).days) > max_allow_days:
             return "خارج النطاق التاريخي 🟡", "🟡", 0.0, False, target_date.strftime("%Y-%m-%d")
 
@@ -204,14 +213,16 @@ def analyze_full_stock_dynamically(df, symbol_clean):
             desc = f"شمعة سلبية هابطة ({pct:.1f}%)"
             is_pos = False
 
-        fmt = "%d %B %Y" if is_weekly else "%B %Y"
         return desc, icon, round(pct, 1), is_pos, actual_date.strftime(fmt)
 
-    c_w_desc, c_w_icon, c_w_perf, _, c_w_date = eval_candle(df_w, matched_curr_week_date, is_weekly=True)
-    n_w_desc, n_w_icon, _, _, n_w_date = eval_candle(df_w, matched_next_week_date, is_weekly=True)
+    c_d_desc, c_d_icon, c_d_perf, _, c_d_date = eval_candle(df_d, matched_curr_day_date, mode="daily")
+    n_d_desc, n_d_icon, _, _, n_d_date = eval_candle(df_d, matched_next_day_date, mode="daily")
+
+    c_w_desc, c_w_icon, c_w_perf, _, c_w_date = eval_candle(df_w, matched_curr_week_date, mode="weekly")
+    n_w_desc, n_w_icon, _, _, n_w_date = eval_candle(df_w, matched_next_week_date, mode="weekly")
     
-    c_m_desc, c_m_icon, c_m_perf, c_m_pos, c_m_date = eval_candle(df_m, matched_curr_month_date, is_weekly=False)
-    n_m_desc, n_m_icon, _, _, n_m_date = eval_candle(df_m, matched_next_month_date, is_weekly=False)
+    c_m_desc, c_m_icon, c_m_perf, c_m_pos, c_m_date = eval_candle(df_m, matched_curr_month_date, mode="monthly")
+    n_m_desc, n_m_icon, _, _, n_m_date = eval_candle(df_m, matched_next_month_date, mode="monthly")
 
     return {
         "symbol": symbol_clean,
@@ -227,11 +238,18 @@ def analyze_full_stock_dynamically(df, symbol_clean):
         "m_perf": c_m_perf,
         "w_perf": c_w_perf,
         "is_pos": c_m_pos,
+        "curr_day_date": curr_date.strftime("%d %B %Y"),
+        "next_day_date": (curr_date + pd.Timedelta(days=1)).strftime("%d %B %Y"),
         "curr_month_date": curr_date.strftime("%B %Y"),
         "next_month_date": (curr_date + pd.DateOffset(months=1)).strftime("%B %Y"),
         "curr_week_date": curr_date.strftime("%d %B %Y"),
         "next_week_date": (curr_date + pd.DateOffset(days=7)).strftime("%d %B %Y"),
-        "matched_curr_d_date": matched_curr_day_date.strftime("%d %B %Y"),
+        "matched_curr_d_date": c_d_date,
+        "matched_curr_d_desc": c_d_desc,
+        "matched_curr_d_icon": c_d_icon,
+        "matched_next_d_date": n_d_date,
+        "matched_next_d_desc": n_d_desc,
+        "matched_next_d_icon": n_d_icon,
         "matched_curr_m_date": c_m_date,
         "matched_curr_m_desc": c_m_desc,
         "matched_curr_m_icon": c_m_icon,
@@ -281,7 +299,7 @@ if data_list:
         
         with st.expander("📅 عرض التواريخ المطابقة في الدورة السابقة"):
             st.markdown(f"""
-            • **اليوم المطابق (1034 شمعة تداول):** `{star_m['matched_curr_d_date']}`  
+            • **اليوم الحالي ({star_m['curr_day_date']}):** يطابق `{star_m['matched_curr_d_date']}` 👈 ({star_m['matched_curr_d_desc']})  
             • **الأسبوع الحالي ({star_m['curr_week_date']}):** يطابق `{star_m['matched_curr_w_date']}` 👈 ({star_m['matched_curr_w_desc']})  
             • **الشهر الحالي ({star_m['curr_month_date']}):** يطابق `{star_m['matched_curr_m_date']}` 👈 ({star_m['matched_curr_m_desc']})
             """)
@@ -300,7 +318,7 @@ if data_list:
         
         with st.expander("📅 عرض التواريخ المطابقة في الدورة السابقة"):
             st.markdown(f"""
-            • **اليوم المطابق (1034 شمعة تداول):** `{worst_m['matched_curr_d_date']}`  
+            • **اليوم الحالي ({worst_m['curr_day_date']}):** يطابق `{worst_m['matched_curr_d_date']}` 👈 ({worst_m['matched_curr_d_desc']})  
             • **الأسبوع الحالي ({worst_m['curr_week_date']}):** يطابق `{worst_m['matched_curr_w_date']}` 👈 ({worst_m['matched_curr_w_desc']})  
             • **الشهر الحالي ({worst_m['curr_month_date']}):** يطابق `{worst_m['matched_curr_m_date']}` 👈 ({worst_m['matched_curr_m_desc']})
             """)
@@ -333,9 +351,11 @@ if data_list:
             """)
 
             st.markdown("---")
-            st.markdown("#### 🗓️ مطابقة الشموع الأسبوعية والشهريّة مع الدورة السابقة:")
+            st.markdown("#### 🗓️ مطابقة الشموع اليومية والأسبوعية والشهريّة مع الدورة السابقة:")
             
-            st.markdown(f"- **اليوم المطابق (شمعة التداول #1034):** يصادف **{item['matched_curr_d_date']}**")
+            st.markdown(f"- **اليوم الحالي ({item['curr_day_date']}):** يصادف **{item['matched_curr_d_date']}** 👈 ({item['matched_curr_d_desc']} {item['matched_curr_d_icon']})")
+            st.markdown(f"- **اليوم القادم ({item['next_day_date']}):** سيصادف **{item['matched_next_d_date']}** 👈 ({item['matched_next_d_desc']} {item['matched_next_d_icon']})")
+            
             st.markdown(f"- **الأسبوع الحالي ({item['curr_week_date']}):** يصادف **{item['matched_curr_w_date']}** 👈 ({item['matched_curr_w_desc']} {item['matched_curr_w_icon']})")
             st.markdown(f"- **الأسبوع القادم ({item['next_week_date']}):** سيصادف **{item['matched_next_w_date']}** 👈 ({item['matched_next_w_desc']} {item['matched_next_w_icon']})")
             
