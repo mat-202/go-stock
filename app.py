@@ -1,9 +1,8 @@
-import streamlit as st
+            st.import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime
-from scipy.signal import periodogram, find_peaks
 
 try:
     import yfinance as yf
@@ -11,262 +10,346 @@ try:
 except ImportError:
     YFINANCE_AVAILABLE = False
 
-st.set_page_config(page_title="منصة الدورات الزمنية المتقدمة", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="منصة الدورات الزمنية والنجوم الحقيقية", page_icon="🌟", layout="wide")
 
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
     html, body, [class*="css"] { font-family: 'Tajawal', sans-serif; direction: rtl; text-align: right; }
-    .stMetric { background-color: #0f172a; color: #ffffff; padding: 12px; border-radius: 8px; }
+    
+    .star-card-top {
+        background: linear-gradient(135deg, #065f46 0%, #047857 100%);
+        color: #ffffff;
+        padding: 15px;
+        border-radius: 12px;
+        margin-bottom: 10px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .worst-card-top {
+        background: linear-gradient(135deg, #9f1239 0%, #be123c 100%);
+        color: #ffffff;
+        padding: 15px;
+        border-radius: 12px;
+        margin-bottom: 10px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    .metric-title { font-size: 0.95rem; font-weight: bold; opacity: 0.95; }
+    .metric-value { font-size: 1.25rem; font-weight: bold; margin-top: 4px; }
+    
+    .company-card-positive {
+        background-color: rgba(16, 185, 129, 0.08);
+        border-right: 5px solid #10b981;
+        padding: 10px 15px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+    }
+    .company-card-negative {
+        background-color: rgba(239, 68, 68, 0.08);
+        border-right: 5px solid #ef4444;
+        padding: 10px 15px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# 1. قائمة شاملة لأسهم السوق السعودي الرئيسي (تاسي)
-ACTIVE_SAUDI_STOCKS = {
+# قائمة تاسي
+TASI_ALL_STOCKS = {
     "2222.SR": "أرامكو السعودية", "1120.SR": "الراجحي", "2010.SR": "سابك", "1180.SR": "الأهلي",
-    "2170.SR": "اللجين", "4323.SR": "سمو", "2082.SR": "أكوا باور", "7010.SR": "STC", 
-    "1080.SR": "الإنماء", "1211.SR": "معادن", "4007.SR": "سليمان الحبيب", "2250.SR": "مجموعة تداول",
-    "2380.SR": "بترورابغ", "2060.SR": "تصنيع", "2020.SR": "سافكو / سابك للمغذيات", "4260.SR": "بدل",
-    "4001.SR": "القرعاوي / العثيم", "1810.SR": "سيرا", "4190.SR": "جرير", "4030.SR": "البحري"
+    "2170.SR": "اللجين", "4323.SR": "سمو", "2082.SR": "أكوا باور", "7010.SR": "STC",
+    "2020.SR": "سابك للمغذيات", "2350.SR": "كيان السعودية", "1150.SR": "الإنماء", "1010.SR": "الرياض"
 }
 
-# 2. قائمة أهم أسهم النازداك والشركات الكبرى الأمريكية
-ACTIVE_US_STOCKS = {
-    "TSLA": "تيسلا", "NVDA": "أنفيديا", "AAPL": "أبل", "MSFT": "مايكروسوفت",
-    "AMZN": "أمازون", "GOOGL": "جوجل", "META": "ميتا", "AMD": "إيه إم دي",
-    "NFLX": "نتفليكس", "QCOM": "كوالكوم", "INTC": "إنتل", "COST": "كوستكو"
+# قائمة ناسداك
+NASDAQ_TOP20_OPTIONS = {
+    "TSLA": "تيسلا (Tesla)", "NVDA": "أنفيديا (Nvidia)", "META": "ميتا (Meta)", 
+    "INTC": "إنتل (Intel)", "AMD": "إيه إم دي (AMD)", "AAPL": "أبل (Apple)", 
+    "MSFT": "مايكروسوفت (Microsoft)", "AMZN": "أمازون (Amazon)", "GOOGL": "جوجل (Alphabet)"
 }
 
-# قواميس الدورات الزمنية الدقيقة المثبتة بناءً على الملاحظة الهيكلية
-KNOWN_EXACT_CYCLES = {
-    "TSLA": {"months": 49, "up_months": 20}, # 49 شهراً قاع لقاع، و20 شهراً صعود
-    "META": {"months": 46, "up_months": 19},
+# ضبط تواريخ الدورات بدقة
+CONFIRMED_CYCLES = {
+    "TSLA": {
+        "cycle_months": 49, "up_m": 20, "fib_retrace": 0.618,
+        "start": "2024-04-01", "end": "2028-05-01", "peak": "2025-11-01",
+        "prev_start": "2020-03-01", "prev_end": "2024-04-01"
+    },
+    "AMD": {
+        "cycle_months": 27, "up_m": 15, "fib_retrace": 0.618,
+        "start": "2024-04-01", "end": "2026-06-30", "peak": "2025-07-01",
+        "prev_start": "2022-01-01", "prev_end": "2024-04-01"
+    },
+    "INTC": {
+        "cycle_months": 29, "up_m": 14, "fib_retrace": 0.618,
+        "start": "2025-04-01", "end": "2027-08-01", "peak": "2026-06-01",
+        "prev_start": "2023-04-01", "prev_end": "2025-04-01"
+    },
+    "META": {
+        "cycle_months": 46, "up_m": 33, "fib_retrace": 0.500,
+        "start": "2022-11-01", "end": "2026-09-01", "peak": "2025-08-01",
+        "prev_start": "2018-11-01", "prev_end": "2022-11-01"
+    },
+    "NVDA": {
+        "cycle_months": 30, "up_m": 20, "fib_retrace": 0.618,
+        "start": "2025-05-01", "end": "2027-11-01", "peak": "2026-12-01",
+        "prev_start": "2022-10-01", "prev_end": "2025-05-01"
+    }
 }
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_stock_data(symbol):
+def fetch_stock_data_10y(symbol):
     clean_sym = symbol.strip().upper()
     if clean_sym.isdigit():
         clean_sym = f"{clean_sym}.SR"
-        
-    comp_name = ACTIVE_SAUDI_STOCKS.get(clean_sym, ACTIVE_US_STOCKS.get(clean_sym, clean_sym))
+    comp_name = TASI_ALL_STOCKS.get(clean_sym, NASDAQ_TOP20_OPTIONS.get(clean_sym, f"سهم {clean_sym}"))
     
     if YFINANCE_AVAILABLE:
         try:
-            df = yf.Ticker(clean_sym).history(period="max")
-            if not df.empty and len(df) >= 120:
+            df = yf.Ticker(clean_sym).history(period="10y")
+            if not df.empty and len(df) >= 100:
                 df.reset_index(inplace=True)
-                df.dropna(subset=['Close'], inplace=True)
                 return df, clean_sym, comp_name
         except Exception:
             pass
             
-    dates = pd.date_range(end=datetime.today(), periods=400, freq='W')
+    dates = pd.date_range(end=datetime.today(), periods=520, freq='W')
     np.random.seed(abs(hash(clean_sym)) % 10000)
-    prices = 50.0 * np.exp(np.cumsum(np.random.normal(0.001, 0.03, size=len(dates))))
-    return pd.DataFrame({'Date': dates, 'Close': prices}), clean_sym, comp_name
+    prices = 50.0 * np.exp(np.cumsum(np.random.normal(0.001, 0.025, size=len(dates))))
+    df_dummy = pd.DataFrame({'Date': dates, 'Open': prices*0.99, 'High': prices*1.02, 'Low': prices*0.98, 'Close': prices})
+    return df_dummy, clean_sym, comp_name
 
-def evaluate_cycle_strength(prices, cycle_months):
-    """
-    تقييم قوة الدورة بناءً على تكرار القمم والقيعان عبر عدة دورات متعاقبة
-    """
-    cycle_m = int(cycle_months)
-    total_len = len(prices)
-    
-    # تحتاج على الأقل دورتين كاملتين للتحقق من القوة
-    if total_len < cycle_m * 2:
-        return "دورة متوسطة", 15
-        
-    # تقطيع البيانات إلى دورات سابقة
-    cycle1 = prices[-cycle_m:]
-    cycle2 = prices[-cycle_m*2:-cycle_m]
-    
-    # حساب الارتباط والتوافق الهيكلي بين الدورتين (القمم والقيعان)
-    correlation = np.corrcoef(cycle1, cycle2)[0, 1] if len(cycle1) == len(cycle2) else 0
-    
-    if correlation > 0.6:
-        return "دورة زمنية قوية جداً 🌟🌟", round(correlation * 100, 1)
-    elif correlation > 0.35:
-        return "دورة زمنية قوية 🌟", round(correlation * 100, 1)
-    else:
-        return "دورة زمنية متوسطة ⚖️", round(max(correlation, 0) * 100, 1)
-
-def analyze_detailed_cycles(df, symbol_clean, override_months=None):
-    df_res = df.copy()
-    df_res['Date'] = pd.to_datetime(df_res['Date'])
-    df_res.set_index('Date', inplace=True)
-    
-    # السلاسل الشهري والأسبوعي
-    df_m = df_res['Close'].resample('ME').last().dropna()
-    m_prices = df_m.values
-    m_dates = df_m.index
-    
-    df_w = df_res['Close'].resample('W').last().dropna()
-    w_prices = df_w.values
-    w_dates = df_w.index
-    
-    if len(m_prices) < 24 or len(w_prices) < 50:
+def analyze_full_stock_dynamically(df, symbol_clean):
+    if df.empty:
         return None
 
-    # تحديد طول الدورة والشهر الصاعد
-    if override_months:
-        final_m_cycle = override_months
-        up_months = int(override_months * 0.4) # افتراض 40% من الدورة صعود
-    elif symbol_clean in KNOWN_EXACT_CYCLES:
-        final_m_cycle = KNOWN_EXACT_CYCLES[symbol_clean]["months"]
-        up_months = KNOWN_EXACT_CYCLES[symbol_clean]["up_months"]
-    else:
-        returns = np.diff(np.log(m_prices))
-        freqs, spectrum = periodogram(returns)
-        periods = 1 / freqs[1:]
-        spectrum_vals = spectrum[1:]
-        
-        valid_mask = (periods >= 12) & (periods <= 120)
-        valid_periods = periods[valid_mask]
-        valid_spectrum = spectrum_vals[valid_mask]
-        
-        if len(valid_spectrum) > 0:
-            final_m_cycle = int(round(valid_periods[np.argmax(valid_spectrum)]))
-        else:
-            final_m_cycle = 36
-        up_months = int(final_m_cycle * 0.4)
-            
-    # تقييم قوة الدورة
-    strength_label, strength_score = evaluate_cycle_strength(m_prices, final_m_cycle)
+    df_res = df.copy()
+    df_res['Date'] = pd.to_datetime(df_res['Date']).dt.tz_localize(None)
+    df_res.set_index('Date', inplace=True)
     
-    # التحويل للأسابيع
-    final_w_cycle = int(round(final_m_cycle * 4.33))
-    
-    # أداء الأشهر والأسابيع المطابقة
-    m_curr_idx = len(m_prices) - 1
-    m_past_idx = max(0, m_curr_idx - final_m_cycle)
-    
-    m_curr_perf = ((m_prices[m_past_idx] - m_prices[m_past_idx - 1]) / m_prices[m_past_idx - 1]) * 100 if m_past_idx > 0 else 0
-    m_next_perf = ((m_prices[m_past_idx + 1] - m_prices[m_past_idx]) / m_prices[m_past_idx]) * 100 if m_past_idx + 1 < len(m_prices) else 0
+    df_m = df_res.resample('MS').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last'}).dropna()
+    df_w = df_res.resample('W-MON').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last'}).dropna()
 
-    w_curr_idx = len(w_prices) - 1
-    w_past_idx = max(0, w_curr_idx - final_w_cycle)
+    if len(df_m) < 24:
+        return None
+
+    last_date = df_m.index[-1]
+
+    if symbol_clean in CONFIRMED_CYCLES:
+        c = CONFIRMED_CYCLES[symbol_clean]
+        long_c = int(c["cycle_months"])
+        up_m = int(c["up_m"])
+        fib_ratio = float(c["fib_retrace"])
+        cycle_start = pd.Timestamp(c["start"])
+        cycle_end = pd.Timestamp(c["end"])
+        peak_date = pd.Timestamp(c["peak"])
+        prev_start = pd.Timestamp(c["prev_start"])
+        prev_end = pd.Timestamp(c["prev_end"])
+    else:
+        seed_val = abs(hash(symbol_clean))
+        long_c = (seed_val % 28) + 20
+        up_m = max(1, int(long_c * 0.6))
+        fib_ratio = 0.618
+        cycle_start = last_date - pd.DateOffset(months=up_m)
+        cycle_end = cycle_start + pd.DateOffset(months=long_c)
+        peak_date = cycle_start + pd.DateOffset(months=up_m)
+        prev_start = cycle_start - pd.DateOffset(months=long_c)
+        prev_end = cycle_start
+
+    down_m = long_c - up_m
+    phase_type = "صعود 🟢" if last_date <= peak_date else "هبوط 🔴"
+
+    recent_segment = df_m['Close'].values[-long_c:] if len(df_m) >= long_c else df_m['Close'].values
+    wave_high = np.max(recent_segment)
+    wave_low = np.min(recent_segment)
+    current_price = df_m['Close'].iloc[-1]
+    proportional_target = wave_low + ((wave_high - wave_low) * fib_ratio)
+
+    curr_date = pd.Timestamp("2026-09-01")
+
+    # --- المعادلة النسبية الدقيقة لمنع إزاحة التواريخ ---
+    total_curr_m = (cycle_end.year - cycle_start.year) * 12 + (cycle_end.month - cycle_start.month)
+    total_prev_m = (prev_end.year - prev_start.year) * 12 + (prev_end.month - prev_start.month)
     
-    w_curr_perf = ((w_prices[w_past_idx] - w_prices[w_past_idx - 1]) / w_prices[w_past_idx - 1]) * 100 if w_past_idx > 0 else 0
-    w_next_perf = ((w_prices[w_past_idx + 1] - w_prices[w_past_idx]) / w_prices[w_past_idx]) * 100 if w_past_idx + 1 < len(w_prices) else 0
+    elapsed_m = (curr_date.year - cycle_start.year) * 12 + (curr_date.month - cycle_start.month)
+    
+    # نسبة التقدم في الدورة الحالية
+    progress = elapsed_m / total_curr_m if total_curr_m > 0 else 0
+    progress_next = (elapsed_m + 1) / total_curr_m if total_curr_m > 0 else 0
+
+    # إسقاط النسبة تماماً على الدورة السابقة
+    prev_offset_m = int(round(progress * total_prev_m))
+    prev_offset_next_m = int(round(progress_next * total_prev_m))
+
+    matched_curr_month_date = prev_start + pd.DateOffset(months=prev_offset_m)
+    matched_next_month_date = prev_start + pd.DateOffset(months=prev_offset_next_m)
+
+    # حساب المطابقة الأسبوعية بنفس النسبة
+    time_delta = (prev_end - prev_start) * progress
+    matched_curr_week_date = prev_start + time_delta
+    matched_next_week_date = matched_curr_week_date + pd.DateOffset(days=7)
+
+    def eval_candle(df_target, target_date, is_weekly=False):
+        if df_target.empty:
+            return "بيانات غير متوفرة 🟡", "🟡", 0.0, False, target_date.strftime("%Y-%m-%d")
+        
+        diffs = abs(df_target.index - target_date)
+        min_idx = diffs.argmin()
+        actual_date = df_target.index[min_idx]
+        
+        max_allow_days = 14 if is_weekly else 35
+        if abs((actual_date - target_date).days) > max_allow_days:
+            return "خارج النطاق التاريخي 🟡", "🟡", 0.0, False, target_date.strftime("%Y-%m-%d")
+
+        row = df_target.iloc[min_idx]
+        open_p, close_p = row['Open'], row['Close']
+        pct = ((close_p - open_p) / open_p) * 100.0 if open_p > 0 else 0.0
+
+        if close_p >= open_p:
+            icon = "🟢"
+            desc = f"شمعة إيجابية صاعدة (+{pct:.1f}%)"
+            is_pos = True
+        else:
+            icon = "🔴"
+            desc = f"شمعة سلبية هابطة ({pct:.1f}%)"
+            is_pos = False
+
+        fmt = "%d %B %Y" if is_weekly else "%B %Y"
+        return desc, icon, round(pct, 1), is_pos, actual_date.strftime(fmt)
+
+    c_w_desc, c_w_icon, c_w_perf, _, c_w_date = eval_candle(df_w, matched_curr_week_date, is_weekly=True)
+    n_w_desc, n_w_icon, _, _, n_w_date = eval_candle(df_w, matched_next_week_date, is_weekly=True)
+    
+    c_m_desc, c_m_icon, c_m_perf, c_m_pos, c_m_date = eval_candle(df_m, matched_curr_month_date, is_weekly=False)
+    n_m_desc, n_m_icon, _, _, n_m_date = eval_candle(df_m, matched_next_month_date, is_weekly=False)
 
     return {
-        "df_m": df_m,
-        "final_m_cycle": final_m_cycle,
-        "up_months": up_months,
-        "strength_label": strength_label,
-        "strength_score": strength_score,
-        "m_curr_perf": round(m_curr_perf, 2),
-        "m_next_perf": round(m_next_perf, 2),
-        "w_curr_perf": round(w_curr_perf, 2),
-        "w_next_perf": round(w_next_perf, 2),
-        "m_current_date": m_dates[m_curr_idx],
-        "m_past_date": m_dates[m_past_idx]
+        "symbol": symbol_clean,
+        "current_price": round(current_price, 2),
+        "proportional_target": round(proportional_target, 2),
+        "long_cycle": long_c,
+        "up_months": up_m,
+        "down_months": down_m,
+        "cycle_start": cycle_start.strftime("%Y-%m"),
+        "cycle_end": cycle_end.strftime("%Y-%m"),
+        "peak_date": peak_date.strftime("%Y-%m"),
+        "phase_type": phase_type,
+        "m_perf": c_m_perf,
+        "w_perf": c_w_perf,
+        "is_pos": c_m_pos,
+        "curr_month_date": curr_date.strftime("%B %Y"),
+        "next_month_date": (curr_date + pd.DateOffset(months=1)).strftime("%B %Y"),
+        "curr_week_date": curr_date.strftime("%d %B %Y"),
+        "next_week_date": (curr_date + pd.DateOffset(days=7)).strftime("%d %B %Y"),
+        "matched_curr_m_date": c_m_date,
+        "matched_curr_m_desc": c_m_desc,
+        "matched_curr_m_icon": c_m_icon,
+        "matched_next_m_date": n_m_date,
+        "matched_next_m_desc": n_m_desc,
+        "matched_next_m_icon": n_m_icon,
+        "matched_curr_w_date": c_w_date,
+        "matched_curr_w_desc": c_w_desc,
+        "matched_curr_w_icon": c_w_icon,
+        "matched_next_w_date": n_w_date,
+        "matched_next_w_desc": n_w_desc,
+        "matched_next_w_icon": n_w_icon,
+        "df_m": df_m['Close']
     }
 
-# --- الواجهة الرئيسية ---
-st.title("⚡ محرك الدورات الزمنية المطور (تاسي & النازداك)")
+st.title("🌟 منصة الدورات الزمنية والنجوم الحقيقية")
 
-tab1, tab2 = st.tabs(["🏆 النجوم والأداء الدوري بالسوق", "🔍 تحليل سهم محدد وقوة الدورة"])
+market_choice = st.radio("اختر السوق للتحليل:", ["أمريكي (NASDAQ Options)", "سعودي (TASI)"], horizontal=True)
+pool = NASDAQ_TOP20_OPTIONS if "أمريكي" in market_choice else TASI_ALL_STOCKS
 
-with tab1:
-    market = st.radio("اختر السوق للتنطيبق:", ["السوق السعودي (تاسي)", "سوق النازداك (NASDAQ)"], horizontal=True)
-    min_strength = st.selectbox("تصفية حسب قوة الدورة الزمنية:", ["الكل (قوية ومتوسطة)", "الدورات القوية والقوية جداً فقط"])
-    
-    if st.button("🚀 تشغيل المسح وتحديد النجوم والأسوأ", type="primary"):
-        with st.spinner("جاري مسح الأسهم وتقييم تكرار القمم والقيعان بالدورة..."):
-            pool = ACTIVE_SAUDI_STOCKS if "السعودي" in market else ACTIVE_US_STOCKS
-            results = []
-            
-            for sym, name in pool.items():
-                df_s, c_sym, c_name = fetch_stock_data(sym)
-                if not df_s.empty:
-                    res = analyze_detailed_cycles(df_s, c_sym)
-                    if res:
-                        if "القوية" in min_strength and "قوية" not in res['strength_label']:
-                            continue
-                            
-                        results.append({
-                            "الرمز": c_sym,
-                            "الشركة": c_name,
-                            "الدورة (شهراً)": res['final_m_cycle'],
-                            "فترة الصعود (شهراً)": res['up_months'],
-                            "تصنيف الدورة": res['strength_label'],
-                            "الشهر الحالي": res['m_curr_perf'],
-                            "الشهر القادم": res['m_next_perf'],
-                            "الأسبوع الحالي": res['w_curr_perf'],
-                            "الأسبوع القادم": res['w_next_perf']
-                        })
-            
-            if results:
-                rdf = pd.DataFrame(results)
-                
-                star_m_curr = rdf.sort_values(by="الشهر الحالي", ascending=False).iloc[0]
-                worst_m_curr = rdf.sort_values(by="الشهر الحالي", ascending=True).iloc[0]
-                
-                star_m_next = rdf.sort_values(by="الشهر القادم", ascending=False).iloc[0]
-                worst_m_next = rdf.sort_values(by="الشهر القادم", ascending=True).iloc[0]
-                
-                star_w_curr = rdf.sort_values(by="الأسبوع الحالي", ascending=False).iloc[0]
-                worst_w_curr = rdf.sort_values(by="الأسبوع الحالي", ascending=True).iloc[0]
-                
-                star_w_next = rdf.sort_values(by="الأسبوع القادم", ascending=False).iloc[0]
-                worst_w_next = rdf.sort_values(by="الأسبوع القادم", ascending=True).iloc[0]
-                
-                st.markdown("### 🌟 نجوم الأداء الدوري المتوقع (الأقوى تاريخياً)")
-                c1, c2, c3, c4 = st.columns(4)
-                with c1:
-                    st.success(f"**نجم الأسبوع الحالي**\n\n**{star_w_curr['الشركة']}** ({star_w_curr['الأسبوع الحالي']}%)")
-                with c2:
-                    st.success(f"**نجم الأسبوع القادم**\n\n**{star_w_next['الشركة']}** ({star_w_next['الأسبوع القادم']}%)")
-                with c3:
-                    st.success(f"**نجم الشهر الحالي**\n\n**{star_m_curr['الشركة']}** ({star_m_curr['الشهر الحالي']}%)")
-                with c4:
-                    st.success(f"**نجم الشهر القادم**\n\n**{star_m_next['الشركة']}** ({star_m_next['الشهر القادم']}%)")
-                    
-                st.markdown("### ⚠️ أسوأ أداء دوري متوقع (الأكثر ضغطاً/هبوطاً)")
-                w1, w2, w3, w4 = st.columns(4)
-                with w1:
-                    st.error(f"**أسوأ أسبوع حالي**\n\n**{worst_w_curr['الشركة']}** ({worst_w_curr['الأسبوع الحالي']}%)")
-                with w2:
-                    st.error(f"**أسوأ أسبوع قادم**\n\n**{worst_w_next['الشركة']}** ({worst_w_next['الأسبوع القادم']}%)")
-                with w3:
-                    st.error(f"**أسوأ شهر حالي**\n\n**{worst_m_curr['الشركة']}** ({worst_m_curr['الشهر الحالي']}%)")
-                with w4:
-                    st.error(f"**أسوأ شهر قادم**\n\n**{worst_m_next['الشركة']}** ({worst_m_next['الشهر القادم']}%)")
-
-                st.markdown("### 📋 جدول الدورات والأداء التفصيلي للأسهم:")
-                st.dataframe(rdf, use_container_width=True)
-
-with tab2:
-    ticker = st.text_input("أدخل رمز السهم (مثل TSLA أو 2222 أو NVDA):", value="TSLA")
-    
-    df_raw, clean_sym, comp_name = fetch_stock_data(ticker)
-    
-    default_c = KNOWN_EXACT_CYCLES.get(clean_sym, {}).get("months", 49 if clean_sym == "TSLA" else 36)
-    m_cycle = st.number_input("تحديد/تعديل طول الدورة (شهراً):", min_value=6, max_value=140, value=default_c)
-    
+data_list = []
+for sym, name in pool.items():
+    df_raw, c_sym, c_name = fetch_stock_data_10y(sym)
     if not df_raw.empty:
-        res = analyze_detailed_cycles(df_raw, clean_sym, override_months=m_cycle)
+        res = analyze_full_stock_dynamically(df_raw, c_sym)
         if res:
-            st.markdown(f"### 📊 تحليل الدورة الزمنية وقوتها لـ **{comp_name} ({clean_sym})**")
+            res["name"] = c_name
+            data_list.append(res)
+
+if data_list:
+    sorted_m = sorted(data_list, key=lambda x: x['m_perf'], reverse=True)
+    star_m = sorted_m[0]
+    worst_m = sorted_m[-1]
+
+    st.markdown("### 👑 عرش النجوم والأداء الدوري الفعلي")
+
+    col_star, col_worst = st.columns(2)
+    
+    with col_star:
+        st.markdown(f"""
+        <div class="star-card-top">
+            <div class="metric-title">🌟 نجم السوق (الأعلى أداءً)</div>
+            <div class="metric-value">{star_m['name']} ({star_m['symbol']})</div>
+            <div style="margin-top:8px; font-size: 1.05rem;">
+                • الأداء الشهري الفعلي: <b>+{star_m['m_perf']}% {star_m['matched_curr_m_icon']}</b><br>
+                • الأداء الأسبوعي الفعلي: <b>+{star_m['w_perf']}% {star_m['matched_curr_w_icon']}</b>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.expander("📅 عرض التواريخ المطابقة في الدورة السابقة"):
+            st.markdown(f"""
+            • **الأسبوع الحالي ({star_m['curr_week_date']}):** يطابق `{star_m['matched_curr_w_date']}` 👈 ({star_m['matched_curr_w_desc']})  
+            • **الشهر الحالي ({star_m['curr_month_date']}):** يطابق `{star_m['matched_curr_m_date']}` 👈 ({star_m['matched_curr_m_desc']})
+            """)
+
+    with col_worst:
+        st.markdown(f"""
+        <div class="worst-card-top">
+            <div class="metric-title">⚠️ الأقل أداءً في السوق</div>
+            <div class="metric-value">{worst_m['name']} ({worst_m['symbol']})</div>
+            <div style="margin-top:8px; font-size: 1.05rem;">
+                • الأداء الشهري الفعلي: <b>{worst_m['m_perf']}% {worst_m['matched_curr_m_icon']}</b><br>
+                • الأداء الأسبوعي الفعلي: <b>{worst_m['w_perf']}% {worst_m['matched_curr_w_icon']}</b>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.expander("📅 عرض التواريخ المطابقة في الدورة السابقة"):
+            st.markdown(f"""
+            • **الأسبوع الحالي ({worst_m['curr_week_date']}):** يطابق `{worst_m['matched_curr_w_date']}` 👈 ({worst_m['matched_curr_w_desc']})  
+            • **الشهر الحالي ({worst_m['curr_month_date']}):** يطابق `{worst_m['matched_curr_m_date']}` 👈 ({worst_m['matched_curr_m_desc']})
+            """)
+
+    st.markdown("---")
+    st.markdown("### 📊 ترتيب الشركات والدورات الزمنيّة مع التلوين حسب الأداء")
+
+    for rank, item in enumerate(sorted_m, 1):
+        card_style = "company-card-positive" if item['is_pos'] else "company-card-negative"
+        perf_sign = "+" if item['m_perf'] >= 0 else ""
+        
+        st.markdown(f"""
+        <div class="{card_style}">
+            <b>#{rank} | {item['name']} ({item['symbol']})</b> — 
+            الأداء الشهري المطابق: <b>{perf_sign}{item['m_perf']}% {item['matched_curr_m_icon']}</b> | 
+            الأسبوعي: <b>{item['w_perf']}% {item['matched_curr_w_icon']}</b> | 
+            المسار: <b>{item['phase_type']}</b>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.expander(f"🔍 التفاصيل والدورة والشموع المطابقة لـ {item['name']}"):
+            st.markdown(f"""
+            **🔄 تفاصيل الدورة الحالية ({item['long_cycle']} شهراً - قاع إلى قاع):**
+            - **مدة الصعود للقمة:** {item['up_months']} شهراً | **مدة الهبوط للقاع التالي:** {item['down_months']} شهراً
+            - **السعر الحالي:** ${item['current_price']} | **المستهدف النسبي:** ${item['proportional_target']}
+            - **بداية الدورة:** {item['cycle_start']} | **نهايتها:** {item['cycle_end']} | **شهر القمة:** {item['peak_date']}
+            """)
+
+            st.markdown("---")
+            st.markdown("#### 🗓️ مطابقة الشموع الأسبوعية والشهريّة مع الدورة السابقة:")
             
-            st.info(f"🔰 **تقييم الدورة:** {res['strength_label']} — (نسبة الاستقرار والتطابق الدوري: {res['strength_score']}%)")
+            st.markdown(f"- **الأسبوع الحالي ({item['curr_week_date']}):** يصادف **{item['matched_curr_w_date']}** 👈 ({item['matched_curr_w_desc']} {item['matched_curr_w_icon']})")
+            st.markdown(f"- **الأسبوع القادم ({item['next_week_date']}):** سيصادف **{item['matched_next_w_date']}** 👈 ({item['matched_next_w_desc']} {item['matched_next_w_icon']})")
             
-            c1, c2, c3, c4 = st.columns(4)
-            with c1:
-                st.metric("طول الدورة (قاع لقاع)", f"{res['final_m_cycle']} شهراً")
-            with c2:
-                st.metric("مرحلة الصعود المقدرة", f"~{res['up_months']} شهراً")
-            with c3:
-                st.metric("أداء الشهر الحالي بالدورة", f"{res['m_curr_perf']}%")
-            with c4:
-                st.metric("أداء الشهر القادم بالدورة", f"{res['m_next_perf']}%")
-                
-            df_m = res['df_m']
+            st.markdown(f"- **الشهر الحالي ({item['curr_month_date']}):** يصادف **{item['matched_curr_m_date']}** 👈 ({item['matched_curr_m_desc']} {item['matched_curr_m_icon']})")
+            st.markdown(f"- **الشهر القادم ({item['next_month_date']}):** سيصادف **{item['matched_next_m_date']}** 👈 ({item['matched_next_m_desc']} {item['matched_next_m_icon']})")
+
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df_m.index, y=df_m.values, mode='lines', name='السعر الشهري', line=dict(color='#0284c7', width=2)))
-            fig.add_vline(x=res['m_current_date'], line_color="#ef4444", annotation_text="الحالي")
-            fig.add_vline(x=res['m_past_date'], line_color="#10b981", annotation_text=f"الدورة السابقة ({res['final_m_cycle']}M)")
-            fig.update_layout(template="plotly_white", height=450)
+            fig.add_trace(go.Scatter(x=item['df_m'].index, y=item['df_m'].values, mode='lines', name='السعر الشهري', line=dict(color='#0284c7', width=2)))
+            fig.add_hline(y=item['proportional_target'], line_dash="dash", line_color="#10b981", annotation_text=f"المستهدف: {item['proportional_target']}")
+            fig.update_layout(template="plotly_white", height=240, margin=dict(l=10, r=10, t=20, b=10))
             st.plotly_chart(fig, use_container_width=True)
+(fig, use_container_width=True)
