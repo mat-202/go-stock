@@ -81,6 +81,10 @@ CONFIRMED_CYCLES = {
         "prev_start": "2018-12-01", "prev_end": "2022-10-01"
     },
     "NVDA": {
+        "use_trading_candles": True,
+        "trading_candles_offset": 629,   # 629 شمعة تداول يومية
+        "weekly_candles_offset": 131,    # 131 شمعة أسبوعية
+        "monthly_candles_offset": 30,    # 30 شمعة شهرية
         "cycle_months": 30, "up_m": 20, "fib_retrace": 0.618,
         "start": "2025-05-01", "end": "2027-11-01", "peak": "2027-01-01",
         "prev_start": "2022-10-01", "prev_end": "2025-04-01"
@@ -146,9 +150,9 @@ def analyze_full_stock_dynamically(df, symbol_clean):
 
     # --- مطابقة الشموع اليومية والأسبوعية والشهرية ---
     if c.get("use_trading_candles", False):
-        daily_offset = c["trading_candles_offset"] # 1034 شمعة تداول
-        weekly_offset = c["weekly_candles_offset"]  # 215 شمعة أسبوعية
-        monthly_offset = c["monthly_candles_offset"] # 49 شمعة شهرية
+        daily_offset = c["trading_candles_offset"]
+        weekly_offset = c["weekly_candles_offset"]
+        monthly_offset = c["monthly_candles_offset"]
 
         # المطابقة اليومية
         curr_d_idx = len(df_d) - 1
@@ -226,6 +230,10 @@ def analyze_full_stock_dynamically(df, symbol_clean):
 
     return {
         "symbol": symbol_clean,
+        "use_trading_candles": c.get("use_trading_candles", False),
+        "trading_candles_offset": c.get("trading_candles_offset", 0),
+        "weekly_candles_offset": c.get("weekly_candles_offset", 0),
+        "monthly_candles_offset": c.get("monthly_candles_offset", 0),
         "current_price": round(current_price, 2),
         "proportional_target": round(proportional_target, 2),
         "long_cycle": long_c,
@@ -340,8 +348,8 @@ if data_list:
         """, unsafe_allow_html=True)
         
         with st.expander(f"🔍 التفاصيل والدورة والشموع المطابقة لـ {item['name']}"):
-            if item['symbol'] == "TSLA":
-                st.markdown("📌 **تم الحساب بدقة 1034 شمعة تداول يومية (215 أسبوعاً / 49 شهراً)**")
+            if item['use_trading_candles']:
+                st.markdown(f"📌 **تم الحساب بدقة {item['trading_candles_offset']} شمعة تداول يومية ({item['weekly_candles_offset']} أسبوعاً / {item['monthly_candles_offset']} شهراً)**")
             
             st.markdown(f"""
             **🔄 تفاصيل الدورة الحالية ({item['long_cycle']} شهراً - قاع إلى قاع):**
