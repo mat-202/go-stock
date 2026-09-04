@@ -60,6 +60,7 @@ TARGET_STOCKS = {
     "NVDA": "أنفيديا (Nvidia)"
 }
 
+# الإعدادات المعتمدة مع إضافة حساب شمعات التداول لـ TSLA
 CONFIRMED_CYCLES = {
     "AMD": {
         "cycle_months": 26, "up_m": 15, "fib_retrace": 0.618,
@@ -67,8 +68,10 @@ CONFIRMED_CYCLES = {
         "prev_start": "2022-01-01", "prev_end": "2024-02-01"
     },
     "TSLA": {
-        "use_weekly_offset": True,
-        "weeks_offset": 215,
+        "use_trading_candles": True,
+        "trading_candles_offset": 1034,  # 1034 شمعة تداول يومية
+        "weekly_candles_offset": 215,    # 215 شمعة أسبوعية
+        "monthly_candles_offset": 49,    # 49 شمعة شهرية
         "cycle_months": 49, "up_m": 20, "fib_retrace": 0.618,
         "start": "2024-04-01", "end": "2028-04-01", "peak": "2025-12-01",
         "prev_start": "2020-03-01", "prev_end": "2024-03-01"
@@ -99,9 +102,10 @@ def fetch_stock_data_10y(symbol):
         except Exception:
             pass
             
-    dates = pd.date_range(end=datetime.today(), periods=520, freq='W')
+    # بيانات محاكاة احتياطية في حال عدم الاتصال
+    dates = pd.date_range(end=datetime.today(), periods=1200, freq='B')
     np.random.seed(abs(hash(clean_sym)) % 10000)
-    prices = 50.0 * np.exp(np.cumsum(np.random.normal(0.001, 0.025, size=len(dates))))
+    prices = 50.0 * np.exp(np.cumsum(np.random.normal(0.001, 0.02, size=len(dates))))
     df_dummy = pd.DataFrame({'Date': dates, 'Open': prices*0.99, 'High': prices*1.02, 'Low': prices*0.98, 'Close': prices})
     return df_dummy, clean_sym, comp_name
 
@@ -113,15 +117,17 @@ def analyze_full_stock_dynamically(df, symbol_clean):
     df_res['Date'] = pd.to_datetime(df_res['Date']).dt.tz_localize(None)
     df_res.set_index('Date', inplace=True)
     
-    df_m = df_res.resample('MS').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last'}).dropna()
+    # تحضير الأطر الزمنية
+    df_d = df_res.dropna() # يومي (شمعات التداول)
     df_w = df_res.resample('W-MON').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last'}).dropna()
+    df_m = df_res.resample('MS').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last'}).dropna()
 
     if len(df_m) < 12:
         return None
 
     last_date = df_m.index[-1]
-
     c = CONFIRMED_CYCLES[symbol_clean]
+    
     long_c = int(c["cycle_months"])
     up_m = int(c["up_m"])
     fib_ratio = float(c["fib_retrace"])
@@ -141,14 +147,28 @@ def analyze_full_stock_dynamically(df, symbol_clean):
 
     curr_date = pd.Timestamp("2026-09-01")
 
-    # تطبيق معادلة الـ 215 أسبوعاً الخاصة بتسلا حصراً
-    if c.get("use_weekly_offset", False):
-        offset_weeks = c["weeks_offset"]
-        matched_curr_week_date = curr_date - pd.Timedelta(weeks=offset_weeks)
-        matched_next_week_date = matched_curr_week_date + pd.Timedelta(days=7)
-        
-        matched_curr_month_date = curr_date - pd.Timedelta(weeks=offset_weeks)
-        matched_next_month_date = matched_curr_month_date + pd.DateOffset(months=1)
+    # --- حساب المطابقة بناءً على شمعات التداول اليومية / الأسبوعية / الشهرية ---
+    if c.get("use_trading_candles", False):
+        daily_offset = c["trading_candles_offset"] # 1034 شمعة تداول
+        weekly_offset = c["weekly_candles_offset"]  # 215 شمعة أسبوعية
+        monthly_offset = c["monthly_candles_offset"] # 49 شمعة شهرية
+
+        # المطابقة اليومية بشمعات التداول
+        curr_d_idx = len(df_d) - 1
+        matched_d_idx = max(0, curr_d_idx - daily_offset)
+        matched_curr_day_date = df_d.index[matched_d_idx]
+
+        # المطابقة الأسبوعية بشمعات الأسابيع
+        curr_w_idx = len(df_w) - 1
+        matched_w_idx = max(0, curr_w_idx - weekly_offset)
+        matched_curr_week_date = df_w.index[matched_w_idx]
+        matched_next_week_date = df_w.index[min(len(df_w) - 1, matched_w_idx + 1)]
+
+        # المطابقة الشهرية بشمعات الأشهر
+        curr_m_idx = len(df_m) - 1
+        matched_m_idx = max(0, curr_m_idx - monthly_offset)
+        matched_curr_month_date = df_m.index[matched_m_idx]
+        matched_next_month_date = df_m.index[min(len(df_m) - 1, matched_m_idx + 1)]
     else:
         m_offset = (curr_date.year - cycle_start.year) * 12 + (curr_date.month - cycle_start.month)
         matched_curr_month_date = prev_start + pd.DateOffset(months=m_offset)
@@ -157,6 +177,7 @@ def analyze_full_stock_dynamically(df, symbol_clean):
         days_offset = (curr_date - cycle_start).days
         matched_curr_week_date = prev_start + pd.Timedelta(days=days_offset)
         matched_next_week_date = matched_curr_week_date + pd.Timedelta(days=7)
+        matched_curr_day_date = matched_curr_week_date
 
     def eval_candle(df_target, target_date, is_weekly=False):
         if df_target.empty:
@@ -210,6 +231,7 @@ def analyze_full_stock_dynamically(df, symbol_clean):
         "next_month_date": (curr_date + pd.DateOffset(months=1)).strftime("%B %Y"),
         "curr_week_date": curr_date.strftime("%d %B %Y"),
         "next_week_date": (curr_date + pd.DateOffset(days=7)).strftime("%d %B %Y"),
+        "matched_curr_d_date": matched_curr_day_date.strftime("%d %B %Y"),
         "matched_curr_m_date": c_m_date,
         "matched_curr_m_desc": c_m_desc,
         "matched_curr_m_icon": c_m_icon,
@@ -259,6 +281,7 @@ if data_list:
         
         with st.expander("📅 عرض التواريخ المطابقة في الدورة السابقة"):
             st.markdown(f"""
+            • **اليوم المطابق (1034 شمعة تداول):** `{star_m['matched_curr_d_date']}`  
             • **الأسبوع الحالي ({star_m['curr_week_date']}):** يطابق `{star_m['matched_curr_w_date']}` 👈 ({star_m['matched_curr_w_desc']})  
             • **الشهر الحالي ({star_m['curr_month_date']}):** يطابق `{star_m['matched_curr_m_date']}` 👈 ({star_m['matched_curr_m_desc']})
             """)
@@ -277,6 +300,7 @@ if data_list:
         
         with st.expander("📅 عرض التواريخ المطابقة في الدورة السابقة"):
             st.markdown(f"""
+            • **اليوم المطابق (1034 شمعة تداول):** `{worst_m['matched_curr_d_date']}`  
             • **الأسبوع الحالي ({worst_m['curr_week_date']}):** يطابق `{worst_m['matched_curr_w_date']}` 👈 ({worst_m['matched_curr_w_desc']})  
             • **الشهر الحالي ({worst_m['curr_month_date']}):** يطابق `{worst_m['matched_curr_m_date']}` 👈 ({worst_m['matched_curr_m_desc']})
             """)
@@ -298,6 +322,9 @@ if data_list:
         """, unsafe_allow_html=True)
         
         with st.expander(f"🔍 التفاصيل والدورة والشموع المطابقة لـ {item['name']}"):
+            if item['symbol'] == "TSLA":
+                st.markdown("📌 **تم الحساب بدقة 1034 شمعة تداول يومية (215 أسبوعاً / 49 شهراً)**")
+            
             st.markdown(f"""
             **🔄 تفاصيل الدورة الحالية ({item['long_cycle']} شهراً - قاع إلى قاع):**
             - **مدة الصعود للقمة:** {item['up_months']} شهراً | **مدة الهبوط للقاع التالي:** {item['down_months']} شهراً
@@ -308,6 +335,7 @@ if data_list:
             st.markdown("---")
             st.markdown("#### 🗓️ مطابقة الشموع الأسبوعية والشهريّة مع الدورة السابقة:")
             
+            st.markdown(f"- **اليوم المطابق (شمعة التداول #1034):** يصادف **{item['matched_curr_d_date']}**")
             st.markdown(f"- **الأسبوع الحالي ({item['curr_week_date']}):** يصادف **{item['matched_curr_w_date']}** 👈 ({item['matched_curr_w_desc']} {item['matched_curr_w_icon']})")
             st.markdown(f"- **الأسبوع القادم ({item['next_week_date']}):** سيصادف **{item['matched_next_w_date']}** 👈 ({item['matched_next_w_desc']} {item['matched_next_w_icon']})")
             
