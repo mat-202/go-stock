@@ -85,9 +85,9 @@ CONFIRMED_CYCLES = {
         "use_trading_candles": True,
         "trading_candles_offset": 960,   # 960 شمعة تداول يومية
         "weekly_candles_offset": 200,   # 200 شمعة أسبوعية
-        "monthly_candles_offset": 46,   # 46 شمعة شهرية
-        "cycle_months": 46, "up_m": 33, "fib_retrace": 0.500,
-        "start": "2022-11-01", "end": "2026-09-01", "peak": "2025-08-01",
+        "monthly_candles_offset": 45,   # 45 شمعة شهرية
+        "cycle_months": 45, "up_m": 32, "fib_retrace": 0.500,
+        "start": "2022-11-01", "end": "2026-08-01", "peak": "2025-07-01",
         "prev_start": "2018-12-01", "prev_end": "2022-10-01",
         "general_trend": "صعود (32 شهر) ⬅️ هبوط (12 شهر)"
     },
