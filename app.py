@@ -39,16 +39,26 @@ st.markdown("""
     .company-card-positive {
         background-color: rgba(16, 185, 129, 0.08);
         border-right: 5px solid #10b981;
-        padding: 10px 15px;
+        padding: 12px 15px;
         border-radius: 8px;
-        margin-bottom: 8px;
+        margin-bottom: 10px;
     }
     .company-card-negative {
         background-color: rgba(239, 68, 68, 0.08);
         border-right: 5px solid #ef4444;
-        padding: 10px 15px;
+        padding: 12px 15px;
         border-radius: 8px;
-        margin-bottom: 8px;
+        margin-bottom: 10px;
+    }
+    .trend-badge {
+        background-color: #f1f5f9;
+        color: #1e293b;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        font-weight: bold;
+        display: inline-block;
+        margin-right: 5px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -61,33 +71,45 @@ TARGET_STOCKS = {
 }
 
 CONFIRMED_CYCLES = {
-    "AMD": {
-        "cycle_months": 26, "up_m": 15, "fib_retrace": 0.618,
-        "start": "2024-06-01", "end": "2026-07-01", "peak": "2025-09-01",
-        "prev_start": "2022-01-01", "prev_end": "2024-02-01"
-    },
     "TSLA": {
         "use_trading_candles": True,
-        "trading_candles_offset": 1034,  # 1034 شمعة تداول يومية
-        "weekly_candles_offset": 215,    # 215 شمعة أسبوعية
-        "monthly_candles_offset": 49,    # 49 شمعة شهرية
+        "trading_candles_offset": 1031, # 1031 شمعة تداول يومية
+        "weekly_candles_offset": 215,   # 215 شمعة أسبوعية
+        "monthly_candles_offset": 49,   # 49 شمعة شهرية
         "cycle_months": 49, "up_m": 20, "fib_retrace": 0.618,
         "start": "2024-04-01", "end": "2028-04-01", "peak": "2025-12-01",
-        "prev_start": "2020-03-01", "prev_end": "2024-03-01"
+        "prev_start": "2020-03-01", "prev_end": "2024-03-01",
+        "general_trend": "صعود (20 شهر) ⬅️ هبوط (14 شهر) ⬅️ صعود (6 أشهر) ⬅️ هبوط (9 أشهر)"
     },
     "META": {
+        "use_trading_candles": True,
+        "trading_candles_offset": 960,   # 960 شمعة تداول يومية
+        "weekly_candles_offset": 200,   # 200 شمعة أسبوعية
+        "monthly_candles_offset": 46,   # 46 شمعة شهرية
         "cycle_months": 46, "up_m": 33, "fib_retrace": 0.500,
         "start": "2022-11-01", "end": "2026-09-01", "peak": "2025-08-01",
-        "prev_start": "2018-12-01", "prev_end": "2022-10-01"
+        "prev_start": "2018-12-01", "prev_end": "2022-10-01",
+        "general_trend": "صعود (32 شهر) ⬅️ هبوط (12 شهر)"
     },
     "NVDA": {
         "use_trading_candles": True,
-        "trading_candles_offset": 629,   # 629 شمعة تداول يومية
-        "weekly_candles_offset": 131,    # 131 شمعة أسبوعية
-        "monthly_candles_offset": 30,    # 30 شمعة شهرية
+        "trading_candles_offset": 625,   # 625 شمعة تداول يومية
+        "weekly_candles_offset": 131,   # 131 شمعة أسبوعية
+        "monthly_candles_offset": 30,   # 30 شمعة شهرية
         "cycle_months": 30, "up_m": 20, "fib_retrace": 0.618,
         "start": "2025-05-01", "end": "2027-11-01", "peak": "2027-01-01",
-        "prev_start": "2022-10-01", "prev_end": "2025-04-01"
+        "prev_start": "2022-10-01", "prev_end": "2025-04-01",
+        "general_trend": "صعود (20 شهر) ⬅️ هبوط (11 شهر)"
+    },
+    "AMD": {
+        "use_trading_candles": True,
+        "trading_candles_offset": 577,   # 577 شمعة تداول يومية
+        "weekly_candles_offset": 121,   # 121 شمعة أسبوعية
+        "monthly_candles_offset": 28,   # 28 شمعة شهرية
+        "cycle_months": 28, "up_m": 15, "fib_retrace": 0.618,
+        "start": "2024-06-01", "end": "2026-10-01", "peak": "2025-09-01",
+        "prev_start": "2022-01-01", "prev_end": "2024-02-01",
+        "general_trend": "صعود (14 شهر) ⬅️ هبوط (14 شهر)"
     }
 }
 
@@ -136,6 +158,7 @@ def analyze_full_stock_dynamically(df, symbol_clean):
     cycle_end = pd.Timestamp(c["end"])
     peak_date = pd.Timestamp(c["peak"])
     prev_start = pd.Timestamp(c["prev_start"])
+    general_trend = c["general_trend"]
 
     down_m = long_c - up_m
     phase_type = "صعود 🟢" if last_date <= peak_date else "هبوط 🔴"
@@ -234,6 +257,7 @@ def analyze_full_stock_dynamically(df, symbol_clean):
         "trading_candles_offset": c.get("trading_candles_offset", 0),
         "weekly_candles_offset": c.get("weekly_candles_offset", 0),
         "monthly_candles_offset": c.get("monthly_candles_offset", 0),
+        "general_trend": general_trend,
         "current_price": round(current_price, 2),
         "proportional_target": round(proportional_target, 2),
         "long_cycle": long_c,
@@ -298,6 +322,7 @@ if data_list:
         <div class="star-card-top">
             <div class="metric-title">🌟 نجم السوق (الأعلى أداءً)</div>
             <div class="metric-value">{star_m['name']} ({star_m['symbol']})</div>
+            <div style="margin-top:6px; font-size: 0.95rem;"><b>📈 الاتجاه العام:</b> {star_m['general_trend']}</div>
             <div style="margin-top:8px; font-size: 1.05rem;">
                 • الأداء الشهري الفعلي: <b>+{star_m['m_perf']}% {star_m['matched_curr_m_icon']}</b><br>
                 • الأداء الأسبوعي الفعلي: <b>+{star_m['w_perf']}% {star_m['matched_curr_w_icon']}</b>
@@ -317,6 +342,7 @@ if data_list:
         <div class="worst-card-top">
             <div class="metric-title">⚠️ الأقل أداءً في السوق</div>
             <div class="metric-value">{worst_m['name']} ({worst_m['symbol']})</div>
+            <div style="margin-top:6px; font-size: 0.95rem;"><b>📈 الاتجاه العام:</b> {worst_m['general_trend']}</div>
             <div style="margin-top:8px; font-size: 1.05rem;">
                 • الأداء الشهري الفعلي: <b>{worst_m['m_perf']}% {worst_m['matched_curr_m_icon']}</b><br>
                 • الأداء الأسبوعي الفعلي: <b>{worst_m['w_perf']}% {worst_m['matched_curr_w_icon']}</b>
@@ -332,7 +358,7 @@ if data_list:
             """)
 
     st.markdown("---")
-    st.markdown("### 📊 ترتيب الشركات والدورات الزمنيّة مع التلوين حسب الأداء")
+    st.markdown("### 📊 ترتيب الشركات والدورات الزمنيّة مع الاتجاه العام والأداء")
 
     for rank, item in enumerate(sorted_m, 1):
         card_style = "company-card-positive" if item['is_pos'] else "company-card-negative"
@@ -341,6 +367,7 @@ if data_list:
         st.markdown(f"""
         <div class="{card_style}">
             <b>#{rank} | {item['name']} ({item['symbol']})</b> — 
+            <span class="trend-badge">الاتجاه العام: {item['general_trend']}</span> | 
             الأداء الشهري المطابق: <b>{perf_sign}{item['m_perf']}% {item['matched_curr_m_icon']}</b> | 
             الأسبوعي: <b>{item['w_perf']}% {item['matched_curr_w_icon']}</b> | 
             المسار: <b>{item['phase_type']}</b>
@@ -348,6 +375,8 @@ if data_list:
         """, unsafe_allow_html=True)
         
         with st.expander(f"🔍 التفاصيل والدورة والشموع المطابقة لـ {item['name']}"):
+            st.markdown(f"📈 **الاتجاه العام المعتمد:** `{item['general_trend']}`")
+            
             if item['use_trading_candles']:
                 st.markdown(f"📌 **تم الحساب بدقة {item['trading_candles_offset']} شمعة تداول يومية ({item['weekly_candles_offset']} أسبوعاً / {item['monthly_candles_offset']} شهراً)**")
             
