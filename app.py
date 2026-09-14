@@ -50,9 +50,9 @@ st.markdown("""
         border-radius: 8px;
         margin-bottom: 10px;
     }
-    .badge-up {
-        background-color: #d1fae5;
-        color: #065f46;
+    .badge-phase {
+        background-color: #0284c7;
+        color: #ffffff;
         padding: 3px 8px;
         border-radius: 6px;
         font-size: 0.85rem;
@@ -60,9 +60,9 @@ st.markdown("""
         display: inline-block;
         margin-left: 5px;
     }
-    .badge-down {
-        background-color: #ffe4e6;
-        color: #9f1239;
+    .badge-sub {
+        background-color: #f1f5f9;
+        color: #334155;
         padding: 3px 8px;
         border-radius: 6px;
         font-size: 0.85rem;
@@ -85,36 +85,54 @@ CONFIRMED_CYCLES = {
         "trading_candles_offset": 1031, 
         "weekly_candles_offset": 215,   
         "monthly_candles_offset": 49,   
-        "cycle_months": 49, "up_m": 20, "fib_retrace": 0.618,
-        "start": "2024-04-01", "end": "2028-04-01", "peak": "2025-12-01",
-        "prev_start": "2020-03-01", "prev_end": "2024-03-01"
+        "fib_retrace": 0.618,
+        "start": "2024-04-01",
+        "prev_start": "2020-03-01", "prev_end": "2024-03-01",
+        "phases": [
+            {"type": "صعود", "duration": 20, "label": "الصعود الأول (قمة 1)"},
+            {"type": "هبوط", "duration": 14, "label": "الهبوط الأول (قاع 1)"},
+            {"type": "صعود", "duration": 6,  "label": "الصعود الثاني (قمة 2)"},
+            {"type": "هبوط", "duration": 9,  "label": "الهبوط الثاني (قاع الدورة)"}
+        ]
     },
     "META": {
         "use_trading_candles": True,
         "trading_candles_offset": 960,   
         "weekly_candles_offset": 200,   
         "monthly_candles_offset": 45,   
-        "cycle_months": 45, "up_m": 32, "fib_retrace": 0.500,
-        "start": "2022-11-01", "end": "2026-08-01", "peak": "2025-07-01",
-        "prev_start": "2018-12-01", "prev_end": "2022-10-01"
+        "fib_retrace": 0.500,
+        "start": "2022-11-01",
+        "prev_start": "2018-12-01", "prev_end": "2022-10-01",
+        "phases": [
+            {"type": "صعود", "duration": 32, "label": "مرحلة الصعود"},
+            {"type": "هبوط", "duration": 13, "label": "مرحلة الهبوط"}
+        ]
     },
     "NVDA": {
         "use_trading_candles": True,
         "trading_candles_offset": 625,   
         "weekly_candles_offset": 131,   
         "monthly_candles_offset": 30,   
-        "cycle_months": 30, "up_m": 20, "fib_retrace": 0.618,
-        "start": "2025-05-01", "end": "2027-11-01", "peak": "2027-01-01",
-        "prev_start": "2022-10-01", "prev_end": "2025-04-01"
+        "fib_retrace": 0.618,
+        "start": "2025-05-01",
+        "prev_start": "2022-10-01", "prev_end": "2025-04-01",
+        "phases": [
+            {"type": "صعود", "duration": 20, "label": "مرحلة الصعود"},
+            {"type": "هبوط", "duration": 10, "label": "مرحلة الهبوط"}
+        ]
     },
     "AMD": {
         "use_trading_candles": True,
         "trading_candles_offset": 577,   
         "weekly_candles_offset": 121,   
         "monthly_candles_offset": 28,   
-        "cycle_months": 28, "up_m": 14, "fib_retrace": 0.618,
-        "start": "2024-06-01", "end": "2026-10-01", "peak": "2025-08-01",
-        "prev_start": "2022-01-01", "prev_end": "2024-02-01"
+        "fib_retrace": 0.618,
+        "start": "2024-06-01",
+        "prev_start": "2022-01-01", "prev_end": "2024-02-01",
+        "phases": [
+            {"type": "صعود", "duration": 14, "label": "مرحلة الصعود"},
+            {"type": "هبوط", "duration": 14, "label": "مرحلة الهبوط"}
+        ]
     }
 }
 
@@ -153,48 +171,56 @@ def analyze_full_stock_dynamically(df, symbol_clean):
     if len(df_m) < 12:
         return None
 
-    last_date = df_m.index[-1]
     c = CONFIRMED_CYCLES[symbol_clean]
-    
-    long_c = int(c["cycle_months"])
-    up_m = int(c["up_m"])
     fib_ratio = float(c["fib_retrace"])
     cycle_start = pd.Timestamp(c["start"])
-    cycle_end = pd.Timestamp(c["end"])
-    peak_date = pd.Timestamp(c["peak"])
     prev_start = pd.Timestamp(c["prev_start"])
+    phases = c["phases"]
 
-    down_m = long_c - up_m
-    phase_type = "صعود 🟢" if last_date <= peak_date else "هبوط 🔴"
+    curr_date = pd.Timestamp("2026-09-01")
 
-    recent_segment = df_m['Close'].values[-long_c:] if len(df_m) >= long_c else df_m['Close'].values
+    # --- الحسابات الديناميكية للمراحل المتعددة ---
+    total_cycle_months = sum(p["duration"] for p in phases)
+    cycle_end = cycle_start + pd.DateOffset(months=total_cycle_months)
+
+    accumulated_m = 0
+    active_phase = None
+    next_phase = None
+    active_phase_end = None
+    
+    for idx, p in enumerate(phases):
+        p_start = cycle_start + pd.DateOffset(months=accumulated_m)
+        accumulated_m += p["duration"]
+        p_end = cycle_start + pd.DateOffset(months=accumulated_m)
+
+        if p_start <= curr_date < p_end:
+            active_phase = p
+            active_phase_end = p_end
+            if idx + 1 < len(phases):
+                next_phase = phases[idx + 1]
+            break
+
+    def calc_month_diff(d1, d2):
+        return (d2.year - d1.year) * 12 + (d2.month - d1.month)
+
+    if active_phase:
+        rem_active_m = calc_month_diff(curr_date, active_phase_end)
+        icon = "🟢" if active_phase["type"] == "صعود" else "🔴"
+        current_status_text = f"المرحلة الحالية: {active_phase['label']} {icon} (متبقي {rem_active_m} شهر حتى {active_phase_end.strftime('%m/%Y')})"
+    else:
+        current_status_text = f"خارج نطاق الدورة الحالية"
+
+    rem_total_cycle_m = calc_month_diff(curr_date, cycle_end)
+    total_cycle_text = f"متبقي {rem_total_cycle_m} شهر على نهاية كامل الدورة ({cycle_end.strftime('%m/%Y')})"
+
+    next_phase_text = f"المرحلة القادمة: {next_phase['label']} ({next_phase['duration']} شهراً)" if next_phase else "آخر مرحلة في الدورة"
+
+    # --- الأهداف والأسعار ---
+    recent_segment = df_m['Close'].values[-total_cycle_months:] if len(df_m) >= total_cycle_months else df_m['Close'].values
     wave_high = np.max(recent_segment)
     wave_low = np.min(recent_segment)
     current_price = df_m['Close'].iloc[-1]
     proportional_target = wave_low + ((wave_high - wave_low) * fib_ratio)
-
-    curr_date = pd.Timestamp("2026-09-01")
-
-    # --- حساب المتبقي عن نهاية الصعود والهبوط ---
-    def calc_month_diff(d1, d2):
-        return (d2.year - d1.year) * 12 + (d2.month - d1.month)
-
-    rem_up_m = calc_month_diff(curr_date, peak_date)
-    rem_down_m = calc_month_diff(curr_date, cycle_end)
-
-    if rem_up_m > 0:
-        rem_up_text = f"متبقي {rem_up_m} شهر على نهاية الصعود ({peak_date.strftime('%m/%Y')})"
-    elif rem_up_m == 0:
-        rem_up_text = f"هذا الشهر هو شهر القمة ({peak_date.strftime('%m/%Y')})"
-    else:
-        rem_up_text = f"انتهى الصعود في ({peak_date.strftime('%m/%Y')})"
-
-    if rem_down_m > 0:
-        rem_down_text = f"متبقي {rem_down_m} شهر على نهاية الهبوط ({cycle_end.strftime('%m/%Y')})"
-    elif rem_down_m == 0:
-        rem_down_text = f"هذا الشهر هو شهر القاع ({cycle_end.strftime('%m/%Y')})"
-    else:
-        rem_down_text = f"انتهت الدورة في ({cycle_end.strftime('%m/%Y')})"
 
     # --- مطابقة الشموع اليومية والأسبوعية والشهرية ---
     if c.get("use_trading_candles", False):
@@ -279,17 +305,15 @@ def analyze_full_stock_dynamically(df, symbol_clean):
         "trading_candles_offset": c.get("trading_candles_offset", 0),
         "weekly_candles_offset": c.get("weekly_candles_offset", 0),
         "monthly_candles_offset": c.get("monthly_candles_offset", 0),
-        "rem_up_text": rem_up_text,
-        "rem_down_text": rem_down_text,
+        "current_status_text": current_status_text,
+        "next_phase_text": next_phase_text,
+        "total_cycle_text": total_cycle_text,
+        "phases_list": phases,
         "current_price": round(current_price, 2),
         "proportional_target": round(proportional_target, 2),
-        "long_cycle": long_c,
-        "up_months": up_m,
-        "down_months": down_m,
+        "total_cycle_months": total_cycle_months,
         "cycle_start": cycle_start.strftime("%Y-%m"),
         "cycle_end": cycle_end.strftime("%Y-%m"),
-        "peak_date": peak_date.strftime("%Y-%m"),
-        "phase_type": phase_type,
         "m_perf": c_m_perf,
         "w_perf": c_w_perf,
         "is_pos": c_m_pos,
@@ -346,8 +370,8 @@ if data_list:
             <div class="metric-title">🌟 نجم السوق (الأعلى أداءً)</div>
             <div class="metric-value">{star_m['name']} ({star_m['symbol']})</div>
             <div style="margin-top:6px; font-size: 0.9rem;">
-                • <b>الصعود:</b> {star_m['rem_up_text']}<br>
-                • <b>الهبوط:</b> {star_m['rem_down_text']}
+                • <b>{star_m['current_status_text']}</b><br>
+                • {star_m['total_cycle_text']}
             </div>
             <div style="margin-top:8px; font-size: 1.05rem;">
                 • الأداء الشهري الفعلي: <b>+{star_m['m_perf']}% {star_m['matched_curr_m_icon']}</b> | الأسبوعي: <b>+{star_m['w_perf']}% {star_m['matched_curr_w_icon']}</b>
@@ -368,8 +392,8 @@ if data_list:
             <div class="metric-title">⚠️ الأقل أداءً في السوق</div>
             <div class="metric-value">{worst_m['name']} ({worst_m['symbol']})</div>
             <div style="margin-top:6px; font-size: 0.9rem;">
-                • <b>الصعود:</b> {worst_m['rem_up_text']}<br>
-                • <b>الهبوط:</b> {worst_m['rem_down_text']}
+                • <b>{worst_m['current_status_text']}</b><br>
+                • {worst_m['total_cycle_text']}
             </div>
             <div style="margin-top:8px; font-size: 1.05rem;">
                 • الأداء الشهري الفعلي: <b>{worst_m['m_perf']}% {worst_m['matched_curr_m_icon']}</b> | الأسبوعي: <b>{worst_m['w_perf']}% {worst_m['matched_curr_w_icon']}</b>
@@ -385,7 +409,7 @@ if data_list:
             """)
 
     st.markdown("---")
-    st.markdown("### 📊 ترتيب الشركات والعد التنازلي للدورة الزمنيّة")
+    st.markdown("### 📊 ترتيب الشركات ومتابعة مراحل الدورة")
 
     for rank, item in enumerate(sorted_m, 1):
         card_style = "company-card-positive" if item['is_pos'] else "company-card-negative"
@@ -394,28 +418,32 @@ if data_list:
         st.markdown(f"""
         <div class="{card_style}">
             <b>#{rank} | {item['name']} ({item['symbol']})</b> — 
-            <span class="badge-up">🟢 {item['rem_up_text']}</span>
-            <span class="badge-down">🔴 {item['rem_down_text']}</span> | 
+            <span class="badge-phase">{item['current_status_text']}</span>
+            <span class="badge-sub">⏳ {item['next_phase_text']}</span> | 
             الشهرية: <b>{perf_sign}{item['m_perf']}% {item['matched_curr_m_icon']}</b> | 
             الأسبوعية: <b>{item['w_perf']}% {item['matched_curr_w_icon']}</b>
         </div>
         """, unsafe_allow_html=True)
         
-        with st.expander(f"🔍 التفاصيل والدورة والشموع المطابقة لـ {item['name']}"):
+        with st.expander(f"🔍 التفاصيل الكاملة وهيكل الدورة لـ {item['name']}"):
             st.markdown(f"""
-            📌 **العد التنازلي لمراحل الدورة:**
-            - **المتبقي على نهاية الصعود:** `{item['rem_up_text']}`
-            - **المتبقي على نهاية الهبوط:** `{item['rem_down_text']}`
+            📌 **الحالة الزمنية الراهنة:**
+            - **المرحلة الحالية:** `{item['current_status_text']}`
+            - **المرحلة القادمة:** `{item['next_phase_text']}`
+            - **إجمالي الدورة:** `{item['total_cycle_text']}`
             """)
+
+            st.markdown("🔄 **تقسيم أقسام/مراحل الدورة بالتفصيل:**")
+            for idx_p, p in enumerate(item['phases_list'], 1):
+                st.markdown(f"  - **المرحلة {idx_p}:** {p['label']} 👈 مدتها **{p['duration']} شهراً** ({p['type']})")
             
             if item['use_trading_candles']:
-                st.markdown(f"📌 **ملاحظة المطابقة:** تم الحساب بدقة {item['trading_candles_offset']} شمعة تداول يومية ({item['weekly_candles_offset']} أسبوعاً / {item['monthly_candles_offset']} شهراً)")
+                st.markdown(f"📌 **دقة المطابقة:** تم الحساب بناءً على {item['trading_candles_offset']} شمعة تداول يومية ({item['weekly_candles_offset']} أسبوعاً / {item['monthly_candles_offset']} شهراً)")
             
             st.markdown(f"""
-            **🔄 تفاصيل الدورة الحالية ({item['long_cycle']} شهراً - قاع إلى قاع):**
-            - **مدة الصعود للقمة:** {item['up_months']} شهراً | **مدة الهبوط للقاع التالي:** {item['down_months']} شهراً
+            **💰 البيانات السعرية:**
             - **السعر الحالي:** ${item['current_price']} | **المستهدف النسبي:** ${item['proportional_target']}
-            - **بداية الدورة:** {item['cycle_start']} | **قمة الدورة المتوقعة:** {item['peak_date']} | **نهاية الدورة المتوقعة:** {item['cycle_end']}
+            - **بداية الدورة:** {item['cycle_start']} | **نهاية الدورة المتوقعة:** {item['cycle_end']} (إجمالي {item['total_cycle_months']} شهراً)
             """)
 
             st.markdown("---")
