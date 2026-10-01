@@ -362,16 +362,25 @@ if data_list:
     col_star, col_worst = st.columns(2)
     
     with col_star:
+        s_name = star_m['name']
+        s_sym = star_m['symbol']
+        s_status = star_m['current_status_text']
+        s_total = star_m['total_cycle_text']
+        s_m_perf = star_m['m_perf']
+        s_m_icon = star_m['matched_curr_m_icon']
+        s_w_perf = star_m['w_perf']
+        s_w_icon = star_m['matched_curr_w_icon']
+        
         st.markdown(f"""
         <div class="star-card-top">
             <div class="metric-title">🌟 نجم السوق (الأعلى أداءً)</div>
-            <div class="metric-value">{star_m['name']} ({star_m['symbol']})</div>
+            <div class="metric-value">{s_name} ({s_sym})</div>
             <div style="margin-top:6px; font-size: 0.9rem;">
-                • <b>{star_m['current_status_text']}</b><br>
-                • {star_m['total_cycle_text']}
+                • <b>{s_status}</b><br>
+                • {s_total}
             </div>
             <div style="margin-top:8px; font-size: 1.05rem;">
-                • الأداء الشهري الفعلي: <b>+{star_m['m_perf']}% {star_m['matched_curr_m_icon']}</b> | الأسبوعي: <b>+{star_m['w_perf']}% {star_m['matched_curr_w_icon']}</b>
+                • الأداء الشهري الفعلي: <b>+{s_m_perf}% {s_m_icon}</b> | الأسبوعي: <b>+{s_w_perf}% {s_w_icon}</b>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -384,16 +393,25 @@ if data_list:
             """)
 
     with col_worst:
+        w_name = worst_m['name']
+        w_sym = worst_m['symbol']
+        w_status = worst_m['current_status_text']
+        w_total = worst_m['total_cycle_text']
+        w_m_perf = worst_m['m_perf']
+        w_m_icon = worst_m['matched_curr_m_icon']
+        w_w_perf = worst_m['w_perf']
+        w_w_icon = worst_m['matched_curr_w_icon']
+
         st.markdown(f"""
         <div class="worst-card-top">
             <div class="metric-title">⚠️ الأقل أداءً في السوق</div>
-            <div class="metric-value">{worst_m['name']} ({worst_m['symbol']})</div>
+            <div class="metric-value">{w_name} ({w_sym})</div>
             <div style="margin-top:6px; font-size: 0.9rem;">
-                • <b>{worst_m['current_status_text']}</b><br>
-                • {worst_m['total_cycle_text']}
+                • <b>{w_status}</b><br>
+                • {w_total}
             </div>
             <div style="margin-top:8px; font-size: 1.05rem;">
-                • الأداء الشهري الفعلي: <b>{worst_m['m_perf']}% {worst_m['matched_curr_m_icon']}</b> | الأسبوعي: <b>{worst_m['w_perf']}% {worst_m['matched_curr_w_icon']}</b>
+                • الأداء الشهري الفعلي: <b>{w_m_perf}% {w_m_icon}</b> | الأسبوعي: <b>{w_w_perf}% {w_w_icon}</b>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -412,35 +430,57 @@ if data_list:
         card_style = "company-card-positive" if item['is_pos'] else "company-card-negative"
         perf_sign = "+" if item['m_perf'] >= 0 else ""
         
+        i_name = item['name']
+        i_sym = item['symbol']
+        i_status = item['current_status_text']
+        i_next = item['next_phase_text']
+        i_m_perf = item['m_perf']
+        i_m_icon = item['matched_curr_m_icon']
+        i_w_perf = item['w_perf']
+        i_w_icon = item['matched_curr_w_icon']
+
         st.markdown(f"""
         <div class="{card_style}">
-            <b>#{rank} | {item['name']} ({item['symbol']})</b> — 
-            <span class="badge-phase">{item['current_status_text']}</span>
-            <span class="badge-sub">⏳ {item['next_phase_text']}</span> | 
-            الشهرية: <b>{perf_sign}{item['m_perf']}% {item['matched_curr_m_icon']}</b> | 
-            الأسبوعية: <b>{item['w_perf']}% {item['matched_curr_w_icon']}</b>
+            <b>#{rank} | {i_name} ({i_sym})</b> — 
+            <span class="badge-phase">{i_status}</span>
+            <span class="badge-sub">⏳ {i_next}</span> | 
+            الشهرية: <b>{perf_sign}{i_m_perf}% {i_m_icon}</b> | 
+            الأسبوعية: <b>{i_w_perf}% {i_w_icon}</b>
         </div>
         """, unsafe_allow_html=True)
         
-        with st.expander(f"🔍 التفاصيل الكاملة وهيكل الدورة لـ {item['name']}"):
+        with st.expander(f"🔍 التفاصيل الكاملة وهيكل الدورة لـ {i_name}"):
+            i_total_text = item['total_cycle_text']
             st.markdown(f"""
             📌 **الحالة الزمنية الراهنة:**
-            - **المرحلة الحالية:** `{item['current_status_text']}`
-            - **المرحلة القادمة:** `{item['next_phase_text']}`
-            - **إجمالي الدورة:** `{item['total_cycle_text']}`
+            - **المرحلة الحالية:** `{i_status}`
+            - **المرحلة القادمة:** `{i_next}`
+            - **إجمالي الدورة:** `{i_total_text}`
             """)
 
             st.markdown("🔄 **تقسيم أقسام/مراحل الدورة بالتفصيل:**")
             for idx_p, p in enumerate(item['phases_list'], 1):
-                st.markdown(f"  - **المرحلة {idx_p}:** {p['label']} 👈 مدتها **{p['duration']} شهراً** ({p['type']})")
+                p_label = p['label']
+                p_dur = p['duration']
+                p_type = p['type']
+                st.markdown(f"  - **المرحلة {idx_p}:** {p_label} 👈 مدتها **{p_dur} شهراً** ({p_type})")
             
             if item['use_trading_candles']:
-                st.markdown(f"📌 **دقة المطابقة:** تم الحساب بناءً على {item['trading_candles_offset']} شمعة تداول يومية ({item['weekly_candles_offset']} أسبوعاً / {item['monthly_candles_offset']} شهراً)")
+                t_off = item['trading_candles_offset']
+                w_off = item['weekly_candles_offset']
+                m_off = item['monthly_candles_offset']
+                st.markdown(f"📌 **دقة المطابقة:** تم الحساب بناءً على {t_off} شمعة تداول يومية ({w_off} أسبوعاً / {m_off} شهراً)")
             
+            curr_p = item['current_price']
+            prop_t = item['proportional_target']
+            c_start = item['cycle_start']
+            c_end = item['cycle_end']
+            tot_m = item['total_cycle_months']
+
             st.markdown(f"""
             **💰 البيانات السعرية:**
-            - **السعر الحالي:** ${item['current_price']} \vert{} **المستهدف النسبي:** ${item['proportional_target']}
-            - **بداية الدورة:** {item['cycle_start']} | **نهاية الدورة المتوقعة:** {item['cycle_end']} (إجمالي {item['total_cycle_months']} شهراً)
+            - **السعر الحالي:** ${curr_p} \vert{} **المستهدف النسبي:** ${prop_t}
+            - **بداية الدورة:** {c_start} | **نهاية الدورة المتوقعة:** {c_end} (إجمالي {tot_m} شهراً)
             """)
 
             st.markdown("---")
@@ -457,6 +497,6 @@ if data_list:
 
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=item['df_m'].index, y=item['df_m'].values, mode='lines', name='السعر الشهري', line=dict(color='#0284c7', width=2)))
-            fig.add_hline(y=item['proportional_target'], line_dash="dash", line_color="#10b981", annotation_text=f"المستهدف: {item['proportional_target']}")
+            fig.add_hline(y=prop_t, line_dash="dash", line_color="#10b981", annotation_text=f"المستهدف: {prop_t}")
             fig.update_layout(template="plotly_white", height=240, margin=dict(l=10, r=10, t=20, b=10))
             st.plotly_chart(fig, use_container_width=True)
