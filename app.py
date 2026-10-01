@@ -82,9 +82,9 @@ TARGET_STOCKS = {
 CONFIRMED_CYCLES = {
     "TSLA": {
         "use_trading_candles": True,
-        "trading_candles_offset": 1023,  # 1023 يوم تداول
-        "weekly_candles_offset": 213,    # 213 أسبوع
-        "monthly_candles_offset": 49,    # 49 شهر
+        "trading_candles_offset": 1023,
+        "weekly_candles_offset": 213,
+        "monthly_candles_offset": 49,
         "fib_retrace": 0.618,
         "start": "2024-04-01",
         "prev_start": "2020-03-01", "prev_end": "2024-03-01",
@@ -139,7 +139,7 @@ CONFIRMED_CYCLES = {
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_stock_data_5y(symbol):
     clean_sym = symbol.strip().upper()
-    comp_name = TARGET_STOCKS.get(clean_sym, f"سهم {clean_sym}")
+    comp_name = TARGET_STOCKS.get(clean_sym, "سهم " + clean_sym)
     
     if YFINANCE_AVAILABLE:
         try:
@@ -205,14 +205,17 @@ def analyze_full_stock_dynamically(df, symbol_clean):
     if active_phase:
         rem_active_m = calc_month_diff(curr_date, active_phase_end)
         icon = "🟢" if active_phase["type"] == "صعود" else "🔴"
-        current_status_text = f"المرحلة الحالية: {active_phase['label']} {icon} (متبقي {rem_active_m} شهر حتى {active_phase_end.strftime('%m/%Y')})"
+        current_status_text = "المرحلة الحالية: " + str(active_phase['label']) + " " + icon + " (متبقي " + str(rem_active_m) + " شهر حتى " + active_phase_end.strftime('%m/%Y') + ")"
     else:
         current_status_text = "خارج نطاق الدورة الحالية"
 
     rem_total_cycle_m = calc_month_diff(curr_date, cycle_end)
-    total_cycle_text = f"متبقي {rem_total_cycle_m} شهر على نهاية كامل الدورة ({cycle_end.strftime('%m/%Y')})"
+    total_cycle_text = "متبقي " + str(rem_total_cycle_m) + " شهر على نهاية كامل الدورة (" + cycle_end.strftime('%m/%Y') + ")"
 
-    next_phase_text = f"المرحلة القادمة: {next_phase['label']} ({next_phase['duration']} شهراً)" if next_phase else "آخر مرحلة في الدورة"
+    if next_phase:
+        next_phase_text = "المرحلة القادمة: " + str(next_phase['label']) + " (" + str(next_phase['duration']) + " شهراً)"
+    else:
+        next_phase_text = "آخر مرحلة في الدورة"
 
     recent_segment = df_m['Close'].values[-total_cycle_months:] if len(df_m) >= total_cycle_months else df_m['Close'].values
     wave_high = np.max(recent_segment)
@@ -278,11 +281,11 @@ def analyze_full_stock_dynamically(df, symbol_clean):
 
         if close_p >= open_p:
             icon = "🟢"
-            desc = f"شمعة إيجابية صاعدة (+{pct:.1f}%)"
+            desc = "شمعة إيجابية صاعدة (+" + str(round(pct, 1)) + "%)"
             is_pos = True
         else:
             icon = "🔴"
-            desc = f"شمعة سلبية هابطة ({pct:.1f}%)"
+            desc = "شمعة سلبية هابطة (" + str(round(pct, 1)) + "%)"
             is_pos = False
 
         return desc, icon, round(pct, 1), is_pos, actual_date.strftime(fmt)
@@ -362,66 +365,68 @@ if data_list:
     col_star, col_worst = st.columns(2)
     
     with col_star:
-        s_name = star_m['name']
-        s_sym = star_m['symbol']
-        s_status = star_m['current_status_text']
-        s_total = star_m['total_cycle_text']
-        s_m_perf = star_m['m_perf']
-        s_m_icon = star_m['matched_curr_m_icon']
-        s_w_perf = star_m['w_perf']
-        s_w_icon = star_m['matched_curr_w_icon']
-        
-        st.markdown(f"""
+        star_html = """
         <div class="star-card-top">
             <div class="metric-title">🌟 نجم السوق (الأعلى أداءً)</div>
-            <div class="metric-value">{s_name} ({s_sym})</div>
+            <div class="metric-value">{name} ({sym})</div>
             <div style="margin-top:6px; font-size: 0.9rem;">
-                • <b>{s_status}</b><br>
-                • {s_total}
+                • <b>{status}</b><br>
+                • {total}
             </div>
             <div style="margin-top:8px; font-size: 1.05rem;">
-                • الأداء الشهري الفعلي: <b>+{s_m_perf}% {s_m_icon}</b> | الأسبوعي: <b>+{s_w_perf}% {s_w_icon}</b>
+                • الأداء الشهري الفعلي: <b>+{m_perf}% {m_icon}</b> | الأسبوعي: <b>+{w_perf}% {w_icon}</b>
             </div>
         </div>
-        """, unsafe_allow_html=True)
+        """.format(
+            name=star_m['name'],
+            sym=star_m['symbol'],
+            status=star_m['current_status_text'],
+            total=star_m['total_cycle_text'],
+            m_perf=star_m['m_perf'],
+            m_icon=star_m['matched_curr_m_icon'],
+            w_perf=star_m['w_perf'],
+            w_icon=star_m['matched_curr_w_icon']
+        )
+        st.markdown(star_html, unsafe_allow_html=True)
         
         with st.expander("📅 عرض التواريخ المطابقة في الدورة السابقة"):
-            st.markdown(f"""
-            • **اليوم الحالي ({star_m['curr_day_date']}):** يطابق `{star_m['matched_curr_d_date']}` 👈 ({star_m['matched_curr_d_desc']})  
-            • **الأسبوع الحالي ({star_m['curr_week_date']}):** يطابق `{star_m['matched_curr_w_date']}` 👈 ({star_m['matched_curr_w_desc']})  
-            • **الشهر الحالي ({star_m['curr_month_date']}):** يطابق `{star_m['matched_curr_m_date']}` 👈 ({star_m['matched_curr_m_desc']})
-            """)
+            st.markdown(
+                "• **اليوم الحالي (" + str(star_m['curr_day_date']) + "):** يطابق `" + str(star_m['matched_curr_d_date']) + "` 👈 (" + str(star_m['matched_curr_d_desc']) + ")\n"
+                "• **الأسبوع الحالي (" + str(star_m['curr_week_date']) + "):** يطابق `" + str(star_m['matched_curr_w_date']) + "` 👈 (" + str(star_m['matched_curr_w_desc']) + ")\n"
+                "• **الشهر الحالي (" + str(star_m['curr_month_date']) + "):** يطابق `" + str(star_m['matched_curr_m_date']) + "` 👈 (" + str(star_m['matched_curr_m_desc']) + ")"
+            )
 
     with col_worst:
-        w_name = worst_m['name']
-        w_sym = worst_m['symbol']
-        w_status = worst_m['current_status_text']
-        w_total = worst_m['total_cycle_text']
-        w_m_perf = worst_m['m_perf']
-        w_m_icon = worst_m['matched_curr_m_icon']
-        w_w_perf = worst_m['w_perf']
-        w_w_icon = worst_m['matched_curr_w_icon']
-
-        st.markdown(f"""
+        worst_html = """
         <div class="worst-card-top">
             <div class="metric-title">⚠️ الأقل أداءً في السوق</div>
-            <div class="metric-value">{w_name} ({w_sym})</div>
+            <div class="metric-value">{name} ({sym})</div>
             <div style="margin-top:6px; font-size: 0.9rem;">
-                • <b>{w_status}</b><br>
-                • {w_total}
+                • <b>{status}</b><br>
+                • {total}
             </div>
             <div style="margin-top:8px; font-size: 1.05rem;">
-                • الأداء الشهري الفعلي: <b>{w_m_perf}% {w_m_icon}</b> | الأسبوعي: <b>{w_w_perf}% {w_w_icon}</b>
+                • الأداء الشهري الفعلي: <b>{m_perf}% {m_icon}</b> | الأسبوعي: <b>{w_perf}% {w_icon}</b>
             </div>
         </div>
-        """, unsafe_allow_html=True)
+        """.format(
+            name=worst_m['name'],
+            sym=worst_m['symbol'],
+            status=worst_m['current_status_text'],
+            total=worst_m['total_cycle_text'],
+            m_perf=worst_m['m_perf'],
+            m_icon=worst_m['matched_curr_m_icon'],
+            w_perf=worst_m['w_perf'],
+            w_icon=worst_m['matched_curr_w_icon']
+        )
+        st.markdown(worst_html, unsafe_allow_html=True)
         
         with st.expander("📅 عرض التواريخ المطابقة في الدورة السابقة"):
-            st.markdown(f"""
-            • **اليوم الحالي ({worst_m['curr_day_date']}):** يطابق `{worst_m['matched_curr_d_date']}` 👈 ({worst_m['matched_curr_d_desc']})  
-            • **الأسبوع الحالي ({worst_m['curr_week_date']}):** يطابق `{worst_m['matched_curr_w_date']}` 👈 ({worst_m['matched_curr_w_desc']})  
-            • **الشهر الحالي ({worst_m['curr_month_date']}):** يطابق `{worst_m['matched_curr_m_date']}` 👈 ({worst_m['matched_curr_m_desc']})
-            """)
+            st.markdown(
+                "• **اليوم الحالي (" + str(worst_m['curr_day_date']) + "):** يطابق `" + str(worst_m['matched_curr_d_date']) + "` 👈 (" + str(worst_m['matched_curr_d_desc']) + ")\n"
+                "• **الأسبوع الحالي (" + str(worst_m['curr_week_date']) + "):** يطابق `" + str(worst_m['matched_curr_w_date']) + "` 👈 (" + str(worst_m['matched_curr_w_desc']) + ")\n"
+                "• **الشهر الحالي (" + str(worst_m['curr_month_date']) + "):** يطابق `" + str(worst_m['matched_curr_m_date']) + "` 👈 (" + str(worst_m['matched_curr_m_desc']) + ")"
+            )
 
     st.markdown("---")
     st.markdown("### 📊 ترتيب الشركات ومتابعة مراحل الدورة")
@@ -430,73 +435,66 @@ if data_list:
         card_style = "company-card-positive" if item['is_pos'] else "company-card-negative"
         perf_sign = "+" if item['m_perf'] >= 0 else ""
         
-        i_name = item['name']
-        i_sym = item['symbol']
-        i_status = item['current_status_text']
-        i_next = item['next_phase_text']
-        i_m_perf = item['m_perf']
-        i_m_icon = item['matched_curr_m_icon']
-        i_w_perf = item['w_perf']
-        i_w_icon = item['matched_curr_w_icon']
-
-        st.markdown(f"""
+        card_html = """
         <div class="{card_style}">
-            <b>#{rank} | {i_name} ({i_sym})</b> — 
-            <span class="badge-phase">{i_status}</span>
-            <span class="badge-sub">⏳ {i_next}</span> | 
-            الشهرية: <b>{perf_sign}{i_m_perf}% {i_m_icon}</b> | 
-            الأسبوعية: <b>{i_w_perf}% {i_w_icon}</b>
+            <b>#{rank} | {name} ({sym})</b> — 
+            <span class="badge-phase">{status}</span>
+            <span class="badge-sub">⏳ {next_phase}</span> | 
+            الشهرية: <b>{perf_sign}{m_perf}% {m_icon}</b> | 
+            الأسبوعية: <b>{w_perf}% {w_icon}</b>
         </div>
-        """, unsafe_allow_html=True)
+        """.format(
+            card_style=card_style,
+            rank=rank,
+            name=item['name'],
+            sym=item['symbol'],
+            status=item['current_status_text'],
+            next_phase=item['next_phase_text'],
+            perf_sign=perf_sign,
+            m_perf=item['m_perf'],
+            m_icon=item['matched_curr_m_icon'],
+            w_perf=item['w_perf'],
+            w_icon=item['matched_curr_w_icon']
+        )
+        st.markdown(card_html, unsafe_allow_html=True)
         
-        with st.expander(f"🔍 التفاصيل الكاملة وهيكل الدورة لـ {i_name}"):
-            i_total_text = item['total_cycle_text']
-            st.markdown(f"""
-            📌 **الحالة الزمنية الراهنة:**
-            - **المرحلة الحالية:** `{i_status}`
-            - **المرحلة القادمة:** `{i_next}`
-            - **إجمالي الدورة:** `{i_total_text}`
-            """)
+        with st.expander("🔍 التفاصيل الكاملة وهيكل الدورة لـ " + str(item['name'])):
+            st.markdown("📌 **الحالة الزمنية الراهنة:**")
+            st.markdown("- **المرحلة الحالية:** `" + str(item['current_status_text']) + "`")
+            st.markdown("- **المرحلة القادمة:** `" + str(item['next_phase_text']) + "`")
+            st.markdown("- **إجمالي الدورة:** `" + str(item['total_cycle_text']) + "`")
 
             st.markdown("🔄 **تقسيم أقسام/مراحل الدورة بالتفصيل:**")
             for idx_p, p in enumerate(item['phases_list'], 1):
-                p_label = p['label']
-                p_dur = p['duration']
-                p_type = p['type']
-                st.markdown(f"  - **المرحلة {idx_p}:** {p_label} 👈 مدتها **{p_dur} شهراً** ({p_type})")
+                st.markdown("  - **المرحلة " + str(idx_p) + ":** " + str(p['label']) + " 👈 مدتها **" + str(p['duration']) + " شهراً** (" + str(p['type']) + ")")
             
             if item['use_trading_candles']:
-                t_off = item['trading_candles_offset']
-                w_off = item['weekly_candles_offset']
-                m_off = item['monthly_candles_offset']
-                st.markdown(f"📌 **دقة المطابقة:** تم الحساب بناءً على {t_off} شمعة تداول يومية ({w_off} أسبوعاً / {m_off} شهراً)")
+                st.markdown("📌 **دقة المطابقة:** تم الحساب بناءً على " + str(item['trading_candles_offset']) + " شمعة تداول يومية (" + str(item['weekly_candles_offset']) + " أسبوعاً / " + str(item['monthly_candles_offset']) + " شهراً)")
             
-            curr_p = item['current_price']
-            prop_t = item['proportional_target']
-            c_start = item['cycle_start']
-            c_end = item['cycle_end']
-            tot_m = item['total_cycle_months']
+            curr_p = str(item['current_price'])
+            prop_t = str(item['proportional_target'])
+            c_start = str(item['cycle_start'])
+            c_end = str(item['cycle_end'])
+            tot_m = str(item['total_cycle_months'])
 
-            st.markdown(f"""
-            **💰 البيانات السعرية:**
-            - **السعر الحالي:** ${curr_p} \vert{} **المستهدف النسبي:** ${prop_t}
-            - **بداية الدورة:** {c_start} | **نهاية الدورة المتوقعة:** {c_end} (إجمالي {tot_m} شهراً)
-            """)
+            st.markdown("**💰 البيانات السعرية:**")
+            st.markdown("- **السعر الحالي:** $" + curr_p + " \vert{} **المستهدف النسبي:** $" + prop_t)
+            st.markdown("- **بداية الدورة:** " + c_start + " | **نهاية الدورة المتوقعة:** " + c_end + " (إجمالي " + tot_m + " شهراً)")
 
             st.markdown("---")
             st.markdown("#### 🗓️ مطابقة الشموع اليومية والأسبوعية والشهريّة مع الدورة السابقة:")
             
-            st.markdown(f"- **اليوم الحالي ({item['curr_day_date']}):** يصادف **{item['matched_curr_d_date']}** 👈 ({item['matched_curr_d_desc']} {item['matched_curr_d_icon']})")
-            st.markdown(f"- **اليوم القادم ({item['next_day_date']}):** سيصادف **{item['matched_next_d_date']}** 👈 ({item['matched_next_d_desc']} {item['matched_next_d_icon']})")
+            st.markdown("- **اليوم الحالي (" + str(item['curr_day_date']) + "):** يصادف **" + str(item['matched_curr_d_date']) + "** 👈 (" + str(item['matched_curr_d_desc']) + " " + str(item['matched_curr_d_icon']) + ")")
+            st.markdown("- **اليوم القادم (" + str(item['next_day_date']) + "):** سيصادف **" + str(item['matched_next_d_date']) + "** 👈 (" + str(item['matched_next_d_desc']) + " " + str(item['matched_next_d_icon']) + ")")
             
-            st.markdown(f"- **الأسبوع الحالي ({item['curr_week_date']}):** يصادف **{item['matched_curr_w_date']}** 👈 ({item['matched_curr_w_desc']} {item['matched_curr_w_icon']})")
-            st.markdown(f"- **الأسبوع القادم ({item['next_week_date']}):** سيصادف **{item['matched_next_w_date']}** 👈 ({item['matched_next_w_desc']} {item['matched_next_w_icon']})")
+            st.markdown("- **الأسبوع الحالي (" + str(item['curr_week_date']) + "):** يصادف **" + str(item['matched_curr_w_date']) + "** 👈 (" + str(item['matched_curr_w_desc']) + " " + str(item['matched_curr_w_icon']) + ")")
+            st.markdown("- **الأسبوع القادم (" + str(item['next_week_date']) + "):** سيصادف **" + str(item['matched_next_w_date']) + "** 👈 (" + str(item['matched_next_w_desc']) + " " + str(item['matched_next_w_icon']) + ")")
             
-            st.markdown(f"- **الشهر الحالي ({item['curr_month_date']}):** يصادف **{item['matched_curr_m_date']}** 👈 ({item['matched_curr_m_desc']} {item['matched_curr_m_icon']})")
-            st.markdown(f"- **الشهر القادم ({item['next_month_date']}):** سيصادف **{item['matched_next_m_date']}** 👈 ({item['matched_next_m_desc']} {item['matched_next_m_icon']})")
+            st.markdown("- **الشهر الحالي (" + str(item['curr_month_date']) + "):** يصادف **" + str(item['matched_curr_m_date']) + "** 👈 (" + str(item['matched_curr_m_desc']) + " " + str(item['matched_curr_m_icon']) + ")")
+            st.markdown("- **الشهر القادم (" + str(item['next_month_date']) + "):** سيصادف **" + str(item['matched_next_m_date']) + "** 👈 (" + str(item['matched_next_m_desc']) + " " + str(item['matched_next_m_icon']) + ")")
 
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=item['df_m'].index, y=item['df_m'].values, mode='lines', name='السعر الشهري', line=dict(color='#0284c7', width=2)))
-            fig.add_hline(y=prop_t, line_dash="dash", line_color="#10b981", annotation_text=f"المستهدف: {prop_t}")
+            fig.add_hline(y=float(prop_t), line_dash="dash", line_color="#10b981", annotation_text="المستهدف: " + prop_t)
             fig.update_layout(template="plotly_white", height=240, margin=dict(l=10, r=10, t=20, b=10))
             st.plotly_chart(fig, use_container_width=True)
