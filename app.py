@@ -82,9 +82,9 @@ TARGET_STOCKS = {
 CONFIRMED_CYCLES = {
     "TSLA": {
         "use_trading_candles": True,
-        "trading_candles_offset": 1031, 
-        "weekly_candles_offset": 215,   
-        "monthly_candles_offset": 49,   
+        "trading_candles_offset": 1023,  # 1023 يوم تداول
+        "weekly_candles_offset": 213,    # 213 أسبوع
+        "monthly_candles_offset": 49,    # 49 شهر
         "fib_retrace": 0.618,
         "start": "2024-04-01",
         "prev_start": "2020-03-01", "prev_end": "2024-03-01",
@@ -137,20 +137,20 @@ CONFIRMED_CYCLES = {
 }
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_stock_data_10y(symbol):
+def fetch_stock_data_5y(symbol):
     clean_sym = symbol.strip().upper()
     comp_name = TARGET_STOCKS.get(clean_sym, f"سهم {clean_sym}")
     
     if YFINANCE_AVAILABLE:
         try:
-            df = yf.Ticker(clean_sym).history(period="10y")
-            if not df.empty and len(df) >= 100:
+            df = yf.Ticker(clean_sym).history(period="5y")
+            if not df.empty and len(df) >= 50:
                 df.reset_index(inplace=True)
                 return df, clean_sym, comp_name
         except Exception:
             pass
             
-    dates = pd.date_range(end=datetime.today(), periods=1200, freq='B')
+    dates = pd.date_range(end=datetime.today(), periods=800, freq='B')
     np.random.seed(abs(hash(clean_sym)) % 10000)
     prices = 50.0 * np.exp(np.cumsum(np.random.normal(0.001, 0.02, size=len(dates))))
     df_dummy = pd.DataFrame({'Date': dates, 'Open': prices*0.99, 'High': prices*1.02, 'Low': prices*0.98, 'Close': prices})
@@ -179,7 +179,6 @@ def analyze_full_stock_dynamically(df, symbol_clean):
 
     curr_date = pd.Timestamp("2026-09-01")
 
-    # --- الحسابات الديناميكية للمراحل المتعددة ---
     total_cycle_months = sum(p["duration"] for p in phases)
     cycle_end = cycle_start + pd.DateOffset(months=total_cycle_months)
 
@@ -208,21 +207,19 @@ def analyze_full_stock_dynamically(df, symbol_clean):
         icon = "🟢" if active_phase["type"] == "صعود" else "🔴"
         current_status_text = f"المرحلة الحالية: {active_phase['label']} {icon} (متبقي {rem_active_m} شهر حتى {active_phase_end.strftime('%m/%Y')})"
     else:
-        current_status_text = f"خارج نطاق الدورة الحالية"
+        current_status_text = "خارج نطاق الدورة الحالية"
 
     rem_total_cycle_m = calc_month_diff(curr_date, cycle_end)
     total_cycle_text = f"متبقي {rem_total_cycle_m} شهر على نهاية كامل الدورة ({cycle_end.strftime('%m/%Y')})"
 
     next_phase_text = f"المرحلة القادمة: {next_phase['label']} ({next_phase['duration']} شهراً)" if next_phase else "آخر مرحلة في الدورة"
 
-    # --- الأهداف والأسعار ---
     recent_segment = df_m['Close'].values[-total_cycle_months:] if len(df_m) >= total_cycle_months else df_m['Close'].values
     wave_high = np.max(recent_segment)
     wave_low = np.min(recent_segment)
     current_price = df_m['Close'].iloc[-1]
     proportional_target = wave_low + ((wave_high - wave_low) * fib_ratio)
 
-    # --- مطابقة الشموع اليومية والأسبوعية والشهرية ---
     if c.get("use_trading_candles", False):
         daily_offset = c["trading_candles_offset"]
         weekly_offset = c["weekly_candles_offset"]
@@ -348,7 +345,7 @@ st.title("🌟 منصة الدورات الزمنية والنجوم (الشرك
 
 data_list = []
 for sym, name in TARGET_STOCKS.items():
-    df_raw, c_sym, c_name = fetch_stock_data_10y(sym)
+    df_raw, c_sym, c_name = fetch_stock_data_5y(sym)
     if not df_raw.empty:
         res = analyze_full_stock_dynamically(df_raw, c_sym)
         if res:
@@ -442,7 +439,7 @@ if data_list:
             
             st.markdown(f"""
             **💰 البيانات السعرية:**
-            - **السعر الحالي:** ${item['current_price']} | **المستهدف النسبي:** ${item['proportional_target']}
+            - **السعر الحالي:** ${item['current_price']} \vert{} **المستهدف النسبي:** ${item['proportional_target']}
             - **بداية الدورة:** {item['cycle_start']} | **نهاية الدورة المتوقعة:** {item['cycle_end']} (إجمالي {item['total_cycle_months']} شهراً)
             """)
 
